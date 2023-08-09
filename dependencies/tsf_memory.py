@@ -1,0 +1,1 @@
+FrameworkDependenciesFiles = ["test.py", "dependencies/__init__.py", "dependencies/hbfmemory.py", "dependencies/hbfmodules.py", "hbf-framework-update/hbfgit.py", "heartbeat.py"]
