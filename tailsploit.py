@@ -6,8 +6,8 @@ try:
     import sys
     from pyspin.spin import Box1, Spinner
     import time
-    from dependencies.hbfmodules import ModulesImported
-    from dependencies.hbfdependencies import Dependencies
+    from dependencies.tsf_modules import ModulesImported
+    from dependencies.tsf_dependencies import Dependencies
 
 except ImportError as MissingModule:
     print(f"[*] Error while initializing Heartbeat, missing module : {MissingModule}")
@@ -41,7 +41,6 @@ class HeartBeat:
 
                   github/{Fore.RED}devmalcolm{Style.RESET_ALL}
                     {Fore.YELLOW}(v.0.2a-dev){Style.RESET_ALL}
-
 
 """     
         os.system("cls")

@@ -28,7 +28,7 @@ def OnAppendBotnetKey(json_file, key_data):
     with open(json_file_path, 'w') as file:
         json.dump(data, file, indent=1)
     
-def GenerateHashkeyRequest(length, permission, custom_path="lib/authentication/"):
+def GenerateHashkeyRequest(length, permission, custom_path="../../lib/authentication/"):
     generated_key = OnGenerateAuthenticationBotnetKey(length)
     print("Generated Key:", generated_key)
 

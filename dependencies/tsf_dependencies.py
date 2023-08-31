@@ -1,5 +1,5 @@
 import os
-from dependencies.hbfmemory import FrameworkDependenciesFiles
+from dependencies.tsf_memory import FrameworkDependenciesFiles
 
 class Dependencies:
     def __init__(self):
