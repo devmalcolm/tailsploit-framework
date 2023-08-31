@@ -394,7 +394,6 @@ class ServerShell:
                     ErrorPingXOR = self.handleXOREncryption(ErrorPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                     admin_socket.send(ErrorPingXOR)
             else:
-                print("EXEC")
                 UserDisconnected = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
                 UserDisconnectedXOR = self.handleXOREncryption(UserDisconnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(UserDisconnectedXOR)
