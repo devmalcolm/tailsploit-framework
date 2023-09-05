@@ -441,7 +441,7 @@ Please check your status or contact the server administrator for further informa
                         ):
                             print("")
                             print(
-                                f"[{Fore.RED}-{Style.RESET_ALL} Cannot found this target.]"
+                                f"{Fore.RED}[-]{Style.RESET_ALL} Cannot start a Reverse TCP Shell with this client/zombie session, please try again."
                             )
                             print("")
                             break

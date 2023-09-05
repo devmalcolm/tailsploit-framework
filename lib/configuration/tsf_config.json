@@ -17,6 +17,10 @@
     "TAILSPLOIT_SERVER_AUTHORIZATION": {
         "TSF_MFA_SESSION_STATE": true,
         "TSF_MFA_SESSION_PASSWORD": "tailsploitmfa",
-        "TSF_SESSION_TIMEOUT": true
+        "TSF_SESSION_TIMEOUT": true,
+        "TSF_SESSION_TIMEOUT_TIME": 1800
+    },
+    "TAILSPLOIT_SERVER_TOKEN": {
+        "TSF_TOKEN_DEFAULT_LENGTH": 64
     }
 }

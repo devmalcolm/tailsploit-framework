@@ -1,30 +1,30 @@
 [
- {
-  "token": "TAILSPLOIT?TOKEN=cvdApAWauV9N2Dd2jEsiziDILgi2sVd3t98RDeiWaswLLVeglbTVIRV3YokmAsBm",
-  "createdTime": "2023/08/03 05:20:03",
-  "status": "active",
-  "permission": "root",
-  "id": 6
- },
- {
-  "token": "TAILSPLOIT?TOKEN=xCS5Pg83UGQ8pp8uHQgxuIViBivKvonKdqW1PoxltTJw1ieTpsLNRsnFWtNjBQkj",
-  "createdTime": "2023/08/31 19:06:56",
-  "status": "active",
-  "permission": "admin",
-  "id": 2
- },
- {
-  "token": "TAILSPLOIT?TOKEN=6W7Ym27UiA9IwkIMQV4UxzdNGsSmd9GXkIeS1rTGmWWEJIzeiSxPuMGBZolg84pF",
-  "createdTime": "2023/08/31 19:07:02",
-  "status": "active",
-  "permission": "root",
-  "id": 3
- },
- {
-  "token": "TAILSPLOIT?TOKEN=Bxi5TYTAVfCTn9BYVCzxPDlrw5PKeipsmS5wUL10dJ9mwM9TKa5hKnAWUksL9P79",
-  "createdTime": "2023/08/31 19:07:05",
-  "status": "active",
-  "permission": "user",
-  "id": 4
- }
+    {
+        "token": "TAILSPLOIT?TOKEN=cvdApAWauV9N2Dd2jEsiziDILgi2sVd3t98RDeiWaswLLVeglbTVIRV3YokmAsBm",
+        "createdTime": "2023/08/03 05:20:03",
+        "status": "active",
+        "permission": "root",
+        "id": 6
+    },
+    {
+        "token": "TAILSPLOIT?TOKEN=xCS5Pg83UGQ8pp8uHQgxuIViBivKvonKdqW1PoxltTJw1ieTpsLNRsnFWtNjBQkj",
+        "createdTime": "2023/08/31 19:06:56",
+        "status": "active",
+        "permission": "admin",
+        "id": 2
+    },
+    {
+        "token": "TAILSPLOIT?TOKEN=6W7Ym27UiA9IwkIMQV4UxzdNGsSmd9GXkIeS1rTGmWWEJIzeiSxPuMGBZolg84pF",
+        "createdTime": "2023/08/31 19:07:02",
+        "status": "active",
+        "permission": "root",
+        "id": 3
+    },
+    {
+        "token": "TAILSPLOIT?TOKEN=Bxi5TYTAVfCTn9BYVCzxPDlrw5PKeipsmS5wUL10dJ9mwM9TKa5hKnAWUksL9P79",
+        "createdTime": "2023/08/31 19:07:05",
+        "status": "active",
+        "permission": "user",
+        "id": 4
+    }
 ]

