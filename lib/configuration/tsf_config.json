@@ -1,0 +1,22 @@
+{
+    "TAILSPLOIT_SERVER_CONFIGURATION": {
+        "TSF_SERVER_IP_CONFIG": "127.0.0.1",
+        "TSF_SERVER_PORT_CONFIG": 5050,
+        "TSF_SERVER_MAX_ADMINS_CONN": 5
+    },
+    "TAILSPLOIT_SERVER_WEBOOK_URL": {
+        "CLIENT_LOG_URL": "",
+        "ADMIN_LOG_URL": "",
+        "SERVER_LOG_URL": ""
+    },
+    "TAILSPLOIT_SERVER_WEBHOOK_STATE": {
+        "CLIENT_LOG_STATE": true,
+        "ADMIN_LOG_STATE": true,
+        "SERVER_LOG_STATE": true
+    },
+    "TAILSPLOIT_SERVER_AUTHORIZATION": {
+        "TSF_MFA_SESSION_STATE": true,
+        "TSF_MFA_SESSION_PASSWORD": "tailsploitmfa",
+        "TSF_SESSION_TIMEOUT": true
+    }
+}

