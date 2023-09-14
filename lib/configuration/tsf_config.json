@@ -15,7 +15,7 @@
         "SERVER_LOG_STATE": true
     },
     "TAILSPLOIT_SERVER_AUTHORIZATION": {
-        "TSF_MFA_SESSION_STATE": true,
+        "TSF_MFA_SESSION_STATE": false,
         "TSF_MFA_SESSION_PASSWORD": "tailsploitmfa",
         "TSF_SESSION_TIMEOUT": true,
         "TSF_SESSION_TIMEOUT_TIME": 1800

