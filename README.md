@@ -28,7 +28,7 @@
 
 
 <p align="center">
-  <b>Tailsploit Framework<a href="https://github.com/your-username/your-repo"> Documentation</a></b>
+  <b>Tailsploit Framework<a href="https://github.com/devmalcolm/tailsploit-framework"> Documentation</a></b>
 </p>
 
 <br>
