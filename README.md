@@ -33,7 +33,8 @@
 
 <br>
 <p align="center">
-  <b>(Early Stage Development)</b>
+  <b>(Early Stage Development) Reworking the entire project</b>
+  <b>Discord: </b>
 </p>
 <br>
 
